@@ -7,9 +7,26 @@ from seaborn.distributions import displot
 
 # %%
 SOURCE = r"https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/vaccinations/vaccinations.csv"
+SOURCE_DEATHS = r"https://covid.ourworldindata.org/data/owid-covid-data.csv"
 
 
-def get_data(extend_by_days=0):
+def get_death_data(extend_by_days=0):
+    df_raw = pd.read_csv(SOURCE_DEATHS)
+    df_raw["date"] = pd.to_datetime(df_raw["date"])
+    death_column = "new_deaths"
+    death_column = "new_deaths_smoothed"
+    df = df_raw.pivot(index="date", columns="location", values=death_column)
+    df = df.fillna(0)
+    # Add additional rows on bottom
+    start = df.index.max()
+    new_range = pd.date_range(start, periods=extend_by_days + 1)[1:]
+    add_below = pd.DataFrame(np.nan, index=new_range, columns=df.columns)
+    df = pd.concat([df, add_below])
+    df.ffill()
+    return df
+
+
+def get_vaccination_data(extend_by_days=0):
     """Load data from CSV and prepare it for use
 
     Args:
@@ -23,10 +40,10 @@ def get_data(extend_by_days=0):
     # Add additional rows on bottom
     start = df.index.max()
     new_range = pd.date_range(start, periods=extend_by_days + 1)[1:]
-
     add_below = pd.DataFrame(0, index=new_range, columns=df.columns)
     df = pd.concat([df, add_below])
     return df
+
 
 # %% Data for Immunity stemming from Vaccination:
 
@@ -67,10 +84,10 @@ def get_eff(doses, days):
     else:
         return x[days]
 
+
 # for ease of use
 one_dose = lambda x: get_eff(1, x)
 two_dose = lambda x: get_eff(2, x)
-
 
 
 # %% Calculate immunity from two regimes
@@ -111,26 +128,72 @@ def calc_immunity_2d(df):
     for (_, row), i in zip(df.iterrows(), days):
         for c in cols:
             backlog = BACKLOG[c]  # get backlog of country
-            need_2nd = backlog.popleft() # remove first
+            need_2nd = backlog.popleft()  # remove first
             total_vacs = row[c]
             if need_2nd > total_vacs:
                 new_vacs = 0
                 # add leftover backlog for next day
-                backlog[0] += need_2nd - total_vacs  
+                backlog[0] += need_2nd - total_vacs
             else:
                 new_vacs = total_vacs - need_2nd
-            backlog.append(new_vacs) # add new one
+            backlog.append(new_vacs)  # add new one
             days_from_jab = [max(0, x - i) for x in range(num_days)]
             result[c] += [x * new_vacs for x in map(two_dose, days_from_jab)]
     result /= 1e6
     return result
 
 
-#%% 
-dfs = get_data(extend_by_days=100)[["Austria", "United States", "United Kingdom"]]
 #%%
-imm1 = calc_immunity_1d(dfs)
-imm1.plot()
-imm2 = calc_immunity_2d(dfs)
-imm2.plot()
+countries = ["Austria", "United States", "United Kingdom"]
+dvs = get_vaccination_data(extend_by_days=100)[countries]
+dds = get_death_data(extend_by_days=100)[countries][dvs.index.min() :]
+#%%
+dds = dds.ffill()
+
+imm1 = calc_immunity_1d(dvs)
+imm2 = calc_immunity_2d(dvs)
+
+
+#%%
+current_dosing = {
+    "Austria": 2,
+    "United States": 2,
+    "United Kingdom": 1,
+    "Test": 2,
+}
+
+at = 'Austria'
+uk = 'United Kingdom'
+us = 'United States'
+
+
+def guesstimate_excess_deaths(imm1, imm2, deaths: pd.DataFrame, method):
+    """Takes two estimated immunities and the resulting death count
+    and scales death count
+
+    Args:
+        immunity ([type]): [description]
+        deaths ([type]): [description]
+    """
+    start = imm1.index.min()
+    imm = [None, imm1, imm2]  # None to have 1D in [1] and 2D in [2]
+    both = dds.join(imm1, rsuffix="_1").join(imm2, rsuffix="_2")[start:]
+    result = pd.DataFrame(0, index=deaths.index, columns=deaths.columns)
+
+    countries = deaths.columns
+    scaled_deaths = dict()
+    for country in countries:
+        f1 = method[country]  # 1 or 2
+        f2 = 3 - f1  # the other one
+        scaled_deaths[country] = deaths[country] / (1 + imm[f2][country]) * (1 + imm[f1][country])
+    return pd.DataFrame(scaled_deaths).join(deaths, rsuffix='_orig')
+
+
+ed = guesstimate_excess_deaths(imm1, imm2, dds, current_dosing)
+ed[[at, at + '_orig']].plot()
+ed[[us, us + '_orig']].plot()
+ed[[uk, uk + '_orig']].plot()
+
+#%%
+ed.cumsum().plot()
 # %%
