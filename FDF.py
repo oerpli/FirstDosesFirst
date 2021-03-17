@@ -9,6 +9,68 @@ import pandas as pd
 SOURCE = r"https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/vaccinations/vaccinations.csv"
 SOURCE_DEATHS = r"https://covid.ourworldindata.org/data/owid-covid-data.csv"
 
+POPULATION_DATA = Path(r"./data/owid-population.csv")
+
+DATA = {
+    "population": r"https://raw.githubusercontent.com/owid/owid-datasets/master/datasets/Population%20by%20age%20group%20to%202100%20(based%20on%20UNWPP%2C%202017%20medium%20scenario)/Population%20by%20age%20group%20to%202100%20(based%20on%20UNWPP%2C%202017%20medium%20scenario).csv",
+}
+
+
+
+def get_age_data():
+    #%% get raw data from owid (source is UN afaik)
+    df = pd.read_csv(POPULATION_DATA)
+    df = df[df.Year == 2020]
+    # rename columns to be less wordy
+    rename = {
+        "Entity": "Location",
+        "Under 15 years old (UNWPP, 2017)": "0-15",
+        "Working age (15-64 years old) (UNWPP, 2017)": "15-64",
+        "65+ years old (UNWPP, 2017)": "65-99",
+        "Under 5 years old (UNWPP, 2017)": "0-4",
+        "5-14 years old (UNWPP, 2017)": "5-14",
+        "15-24 years old (UNWPP, 2017)": "15-24",
+        "25-64 years old (UNWPP, 2017)": "25-64",
+    }
+    df = df.rename(rename, axis=1)
+    # age brackets don't match with population data, use data from USA to split up groups
+    # https://www.census.gov/data/tables/time-series/demo/popest/2010s-national-detail.html
+    # basically, assume that age distribution of USA is broadly representative of whole world
+    age_factors = {  # each letter group sums up to 1
+        "0-4": {(0, 4): 19576683 / 19576683},  # A
+        "5-14": {  # B
+            (5, 9): 20195895 / 40994163,
+            (10, 14): 20798268 / 40994163,
+        },
+        "15-24": {  # C
+            (15, 19): 21054570 / 42687510,
+            (20, 24): 21632940 / 42687510,
+        },
+        "25-64": {  # D
+            (25, 29): 23509016 / 170922904,
+            (30, 34): 22431305 / 170922904,
+            (35, 39): 21737521 / 170922904,
+            (40, 44): 19921623 / 170922904,
+            (45, 49): 20397751 / 170922904,
+            (50, 54): 20477151 / 170922904,
+            (55, 59): 21877391 / 170922904,
+            (60, 64): 20571146 / 170922904,
+        },
+        "65-99": {  # E
+            (65, 69): 17455001 / 54058263,
+            (70, 74): 14028432 / 54058263,
+            (75, 79): 9652665 / 54058263,
+            (80, 84): 6317207 / 54058263,
+            (85, 99): 6604958 / 54058263,
+        },
+    }
+    # rearrange and drop useless stuff
+    new_groups = {"Location": df["Location"]}
+    for group, subgroups in age_factors.items():
+        for (lower, upper), factor in subgroups.items():
+            new_groups[f"{lower}-{upper}"] = (df[group] * factor).astype(int)
+    return pd.DataFrame(new_groups).set_index("Location")
+
 
 def get_death_data(extend_by_days=0):
     df_raw = pd.read_csv(SOURCE_DEATHS)
@@ -199,4 +261,26 @@ cumsum = ed.cumsum()
 cumsum.plot()
 cumsum.max()
 
-# %%
+
+age = get_age_data()
+age
+
+
+#%%
+def get_risk_by_age():
+    # data from CDC
+    # https://www.cdc.gov/coronavirus/2019-ncov/images/need-extra-precautions/319360-A_COVID-19_RiskForSevereDisease_Race_Age_2.18_p1.jpg
+    # tuples denote inclusive ranges
+    age_risk_factor = {
+        (0, 4): 2,  # X
+        (5, 17): 1,  # reference group A
+        (18, 29): 15,  # B
+        (30, 39): 45,  # C
+        (40, 49): 130,  # D
+        (50, 64): 400,  # E
+        (65, 74): 1100,  # F
+        (75, 84): 2800,  # G
+        (85, 99): 7900,  # H
+    }
+
+
