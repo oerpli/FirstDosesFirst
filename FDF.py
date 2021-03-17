@@ -1,9 +1,9 @@
 #%%
 from collections import defaultdict, deque
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-import seaborn as sns
-from seaborn.distributions import displot
 
 # %%
 SOURCE = r"https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/vaccinations/vaccinations.csv"
@@ -162,9 +162,9 @@ current_dosing = {
     "Test": 2,
 }
 
-at = 'Austria'
-uk = 'United Kingdom'
-us = 'United States'
+at = "Austria"
+uk = "United Kingdom"
+us = "United States"
 
 
 def guesstimate_excess_deaths(imm1, imm2, deaths: pd.DataFrame, method):
@@ -177,23 +177,26 @@ def guesstimate_excess_deaths(imm1, imm2, deaths: pd.DataFrame, method):
     """
     start = imm1.index.min()
     imm = [None, imm1, imm2]  # None to have 1D in [1] and 2D in [2]
-    both = dds.join(imm1, rsuffix="_1").join(imm2, rsuffix="_2")[start:]
-    result = pd.DataFrame(0, index=deaths.index, columns=deaths.columns)
 
     countries = deaths.columns
     scaled_deaths = dict()
     for country in countries:
         f1 = method[country]  # 1 or 2
         f2 = 3 - f1  # the other one
-        scaled_deaths[country] = deaths[country] / (1 + imm[f2][country]) * (1 + imm[f1][country])
-    return pd.DataFrame(scaled_deaths).join(deaths, rsuffix='_orig')
+        scaled_deaths[country] = (
+            deaths[country] / (1 + imm[f2][country]) * (1 + imm[f1][country])
+        )
+    return pd.DataFrame(scaled_deaths).join(deaths, rsuffix="_orig")
 
 
 ed = guesstimate_excess_deaths(imm1, imm2, dds, current_dosing)
-ed[[at, at + '_orig']].plot()
-ed[[us, us + '_orig']].plot()
-ed[[uk, uk + '_orig']].plot()
+ed[[at, at + "_orig"]].cumsum().plot()
+ed[[us, us + "_orig"]].plot()
+ed[[uk, uk + "_orig"]].plot()
 
 #%%
-ed.cumsum().plot()
+cumsum = ed.cumsum()
+cumsum.plot()
+cumsum.max()
+
 # %%
