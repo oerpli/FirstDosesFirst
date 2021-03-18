@@ -8,6 +8,7 @@ import pandas as pd
 # %%
 SOURCE = r"https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/vaccinations/vaccinations.csv"
 SOURCE_DEATHS = r"https://covid.ourworldindata.org/data/owid-covid-data.csv"
+DEATH_DISTRIBUTION = r"./data/death_count_by_age.csv" # CDC https://data.cdc.gov/NCHS/Provisional-COVID-19-Death-Counts-by-Sex-Age-and-S/9bhg-hcku/
 
 POPULATION_DATA = Path(r"./data/owid-population.csv")
 
@@ -243,18 +244,25 @@ def guesstimate_excess_deaths(imm1, imm2, deaths: pd.DataFrame, method):
     countries = deaths.columns
     scaled_deaths = dict()
     for country in countries:
-        f1 = method[country]  # 1 or 2
-        f2 = 3 - f1  # the other one
-        scaled_deaths[country] = (
+        # f1 = method[country]  # 1 or 2
+        # f2 = 3 - f1  # the other one
+        f1 = 1 # always use 1D and 2D
+        f2 = 2 # always use 1D and 2D
+        scaled_deaths[(country, "1D")] = (
             deaths[country] / (1 + imm[f2][country]) * (1 + imm[f1][country])
         )
-    return pd.DataFrame(scaled_deaths).join(deaths, rsuffix="_orig")
+        scaled_deaths[(country, "2D")] = deaths[country]
+
+    df =  pd.DataFrame(scaled_deaths)
+    df.columns = pd.MultiIndex.from_tuples(df.columns)
+    # return pd.DataFrame(scaled_deaths).join(deaths, rsuffix="_orig")
+    return df
 
 
 ed = guesstimate_excess_deaths(imm1, imm2, dds, current_dosing)
-ed[[at, at + "_orig"]].cumsum().plot()
-ed[[us, us + "_orig"]].plot()
-ed[[uk, uk + "_orig"]].plot()
+ed[at].cumsum().plot()
+ed[us].cumsum().plot()
+ed[uk].plot()
 
 #%%
 cumsum = ed.cumsum()
@@ -282,5 +290,4 @@ def get_risk_by_age():
         (75, 84): 2800,  # G
         (85, 99): 7900,  # H
     }
-
-
+# %%
