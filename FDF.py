@@ -8,7 +8,7 @@ import pandas as pd
 # %%
 SOURCE = r"https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/vaccinations/vaccinations.csv"
 SOURCE_DEATHS = r"https://covid.ourworldindata.org/data/owid-covid-data.csv"
-DEATH_DISTRIBUTION = r"./data/death_count_by_age.csv" # CDC https://data.cdc.gov/NCHS/Provisional-COVID-19-Death-Counts-by-Sex-Age-and-S/9bhg-hcku/
+DEATH_DISTRIBUTION = r"./data/death_count_by_age.csv"  # CDC https://data.cdc.gov/NCHS/Provisional-COVID-19-Death-Counts-by-Sex-Age-and-S/9bhg-hcku/
 
 POPULATION_DATA = Path(r"./data/owid-population.csv")
 
@@ -16,6 +16,8 @@ DATA = {
     "population": r"https://raw.githubusercontent.com/owid/owid-datasets/master/datasets/Population%20by%20age%20group%20to%202100%20(based%20on%20UNWPP%2C%202017%20medium%20scenario)/Population%20by%20age%20group%20to%202100%20(based%20on%20UNWPP%2C%202017%20medium%20scenario).csv",
 }
 
+D1 = "1D"
+D2 = "2D"
 
 
 def get_age_data():
@@ -154,6 +156,11 @@ two_dose = lambda x: get_eff(2, x)
 
 
 # %% Calculate immunity from two regimes
+
+TOTAL_VAC = defaultdict(list)
+TOTAL_JAB = defaultdict(list)
+
+
 def calc_immunity_1d(df):
     """Input is DF with #vacc per mill/day (one column per country)
     Iterates over all rows, calculates the added immunity of each row to
@@ -166,9 +173,12 @@ def calc_immunity_1d(df):
     days = np.arange(result.shape[0])
     cols = list(df.columns)
     for (_, row), i in zip(df.iterrows(), days):
-        for c in cols:
+        for country in cols:
+            new_vac = row[country]
             days_from_jab = [max(0, x - i) for x in range(num_days)]
-            result[c] += [x * row[c] for x in map(one_dose, days_from_jab)]
+            result[country] += [x * new_vac for x in map(one_dose, days_from_jab)]
+            TOTAL_VAC[(country, D1)].append(new_vac)
+            TOTAL_JAB[(country, D1)].append(new_vac)
     result /= 1e6
     return result
 
@@ -189,33 +199,43 @@ def calc_immunity_2d(df):
     days = np.arange(result.shape[0])
     cols = list(df.columns)
     for (_, row), i in zip(df.iterrows(), days):
-        for c in cols:
-            backlog = BACKLOG[c]  # get backlog of country
+        for country in cols:
+            backlog = BACKLOG[country]  # get backlog of country
             need_2nd = backlog.popleft()  # remove first
-            total_vacs = row[c]
-            if need_2nd > total_vacs:
-                new_vacs = 0
-                # add leftover backlog for next day
-                backlog[0] += need_2nd - total_vacs
+            total_vacs_of_day = row[country]
+            if need_2nd > total_vacs_of_day:
+                new_vac_on_day = 0
+                # give vacc to those that need 2nd shot
+                # and add remaining to backlog for next day
+                didnt_get_second = need_2nd - total_vacs_of_day
+                backlog[0] += didnt_get_second
             else:
-                new_vacs = total_vacs - need_2nd
-            backlog.append(new_vacs)  # add new one
+                new_vac_on_day = total_vacs_of_day - need_2nd
+            backlog.append(new_vac_on_day)  # add new one
             days_from_jab = [max(0, x - i) for x in range(num_days)]
-            result[c] += [x * new_vacs for x in map(two_dose, days_from_jab)]
+            result[country] += [
+                x * new_vac_on_day for x in map(two_dose, days_from_jab)
+            ]
+            TOTAL_VAC[(country, D2)].append(new_vac_on_day)
+            TOTAL_JAB[(country, D2)].append(total_vacs_of_day)
     result /= 1e6
     return result
 
 
-#%%
 countries = ["Austria", "United States", "United Kingdom"]
 dvs = get_vaccination_data(extend_by_days=100)[countries]
 dds = get_death_data(extend_by_days=100)[countries][dvs.index.min() :]
-#%%
 dds = dds.ffill()
 
 imm1 = calc_immunity_1d(dvs)
 imm2 = calc_immunity_2d(dvs)
 
+df_V = pd.DataFrame(TOTAL_VAC)
+df_V.index = imm1.index
+df_V.columns = pd.MultiIndex.from_tuples(df_V.columns)
+df_J = pd.DataFrame(TOTAL_JAB)
+df_J.index = imm1.index
+df_J.columns = pd.MultiIndex.from_tuples(df_J.columns)
 
 #%%
 current_dosing = {
@@ -246,14 +266,14 @@ def guesstimate_excess_deaths(imm1, imm2, deaths: pd.DataFrame, method):
     for country in countries:
         # f1 = method[country]  # 1 or 2
         # f2 = 3 - f1  # the other one
-        f1 = 1 # always use 1D and 2D
-        f2 = 2 # always use 1D and 2D
-        scaled_deaths[(country, "1D")] = (
-            deaths[country] / (1 + imm[f2][country]) * (1 + imm[f1][country])
-        )
-        scaled_deaths[(country, "2D")] = deaths[country]
+        f1 = 1  # always use 1D and 2D
+        f2 = 2  # always use 1D and 2D
+        scaled_deaths[(country, D1)] = (
+            deaths[country] / (1 - imm[f2][country]) * (1 - imm[f1][country])
+        ).astype(int)
+        scaled_deaths[(country, D2)] = deaths[country].astype(int)
 
-    df =  pd.DataFrame(scaled_deaths)
+    df = pd.DataFrame(scaled_deaths)
     df.columns = pd.MultiIndex.from_tuples(df.columns)
     # return pd.DataFrame(scaled_deaths).join(deaths, rsuffix="_orig")
     return df
@@ -268,13 +288,18 @@ ed[uk].plot()
 cumsum = ed.cumsum()
 cumsum.plot()
 cumsum.max()
+#%%%
+current_total_deaths = cumsum.loc["2021-03-20"].unstack()
+current_total_deaths["Benefit 1D"] = current_total_deaths[D2] - current_total_deaths[D1]
+
+print(current_total_deaths.to_markdown())
 
 
+#%%
 age = get_age_data()
 age
 
 
-#%%
 def get_risk_by_age():
     # data from CDC
     # https://www.cdc.gov/coronavirus/2019-ncov/images/need-extra-precautions/319360-A_COVID-19_RiskForSevereDisease_Race_Age_2.18_p1.jpg
@@ -290,4 +315,6 @@ def get_risk_by_age():
         (75, 84): 2800,  # G
         (85, 99): 7900,  # H
     }
+
+
 # %%
