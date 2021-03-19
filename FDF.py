@@ -1,13 +1,19 @@
 #%%
 from datetime import datetime
 from collections import defaultdict, deque
+from os import write
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
+from utility import write_to_file
+
 
 TODAY = datetime.now().date().strftime("%Y-%m-%d")
+
+ANALYSIS_NOTES = Path("writeup") / "analysis.md"
+
 
 # %%
 SOURCE_VACCINATIONS = r"https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/vaccinations/vaccinations.csv"
@@ -24,6 +30,18 @@ DATA = {
 D0 = "0D"
 D1 = "1D"
 D2 = "2D"
+
+
+current_dosing = {
+    "Austria": 2,
+    "United States": 2,
+    "United Kingdom": 1,
+    "Test": 2,
+}
+
+at = "Austria"
+uk = "United Kingdom"
+us = "United States"
 
 
 def get_age_data():
@@ -159,10 +177,8 @@ def get_death_by_age_us():
     return df
 
 
-dba = get_death_by_age_us()
-display(dba)
-display(dba.sum())
-
+deaths_by_age = get_death_by_age_us()
+deaths_by_age
 
 #%%
 
@@ -199,18 +215,15 @@ eff_after_snd_z = 0.95
 total = x + y + z
 
 
-one_dose = [
+# In either case, vacc starts with 7st dose and divergence happens after ~3 weeks
+first_dose = [
     (0, base_immunity),
-    (7, base_immunity + 0.01),
+    (7, base_immunity + 0.005),
     (x, eff_after_fst_x),
-    (x + y, eff_after_fst_y),
 ]
-two_dose = [
-    (0, 0),
-    (7, base_immunity + 0.01),
-    (x, eff_after_fst_x),
-    (x + z, eff_after_snd_z),
-]
+
+one_dose = [*first_dose, (x + y, eff_after_fst_y)]
+two_dose = [*first_dose, (x + z, eff_after_snd_z)]
 
 days = pd.DataFrame({"days": list(range(total))}).set_index("days")
 eff_1d = pd.DataFrame(one_dose, columns=["days", "one_dose"]).set_index("days")
@@ -218,6 +231,11 @@ eff_2d = pd.DataFrame(two_dose, columns=["days", "two_dose"]).set_index("days")
 
 # create df from interpolation of data points
 combined = days.join(eff_1d).join(eff_2d).sort_index().interpolate(axis=0)
+
+
+efficacy_table = (combined.iloc[:40:3] * 100).astype(int)
+write_to_file(ANALYSIS_NOTES, "EfficacyTable", efficacy_table.to_markdown())
+#%%
 
 # function to get expected immunity after n days for 1d/2d regime
 def get_eff(doses, days):
@@ -316,16 +334,6 @@ df_J.index = imm1.index
 df_J.columns = pd.MultiIndex.from_tuples(df_J.columns)
 
 #%%
-current_dosing = {
-    "Austria": 2,
-    "United States": 2,
-    "United Kingdom": 1,
-    "Test": 2,
-}
-
-at = "Austria"
-uk = "United Kingdom"
-us = "United States"
 
 
 def guesstimate_excess_deaths(imm1, imm2, deaths: pd.DataFrame, method):
@@ -373,9 +381,13 @@ cumsum.plot()
 cumsum.max()
 #%%%
 current_total_deaths = cumsum.loc["2021-03-20"].unstack()
-for (x,y) in [(D1,D0), (D2,D0), (D1,D2)]:
-    current_total_deaths[f"{x} vs {y}"] = current_total_deaths[x] - current_total_deaths[y]
-print(current_total_deaths.to_markdown())
+for (x, y) in [(D2, D0), (D1, D0), (D1, D2)]:
+    current_total_deaths[f"{x} vs {y}"] = (
+        current_total_deaths[y] - current_total_deaths[x]
+    )
+
+
+write_to_file(ANALYSIS_NOTES, "SimpleAnalysis", current_total_deaths.to_markdown())
 
 
 #%%
