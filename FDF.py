@@ -1,21 +1,27 @@
 #%%
+from datetime import datetime
 from collections import defaultdict, deque
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-# %%
-SOURCE = r"https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/vaccinations/vaccinations.csv"
-SOURCE_DEATHS = r"https://covid.ourworldindata.org/data/owid-covid-data.csv"
-DEATH_DISTRIBUTION = r"./data/death_count_by_age.csv"  # CDC https://data.cdc.gov/NCHS/Provisional-COVID-19-Death-Counts-by-Sex-Age-and-S/9bhg-hcku/
 
+TODAY = datetime.now().date().strftime("%Y-%m-%d")
+
+# %%
+SOURCE_VACCINATIONS = r"https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/vaccinations/vaccinations.csv"
+SOURCE_DEATHS = r"https://covid.ourworldindata.org/data/owid-covid-data.csv"
+# CDC https://data.cdc.gov/NCHS/Provisional-COVID-19-Death-Counts-by-Sex-Age-and-S/9bhg-hcku/
+DEATH_DISTRIBUTION = Path(r"./data/death_count_by_age.csv")
+# Population worldwide - age brackets
 POPULATION_DATA = Path(r"./data/owid-population.csv")
 
 DATA = {
     "population": r"https://raw.githubusercontent.com/owid/owid-datasets/master/datasets/Population%20by%20age%20group%20to%202100%20(based%20on%20UNWPP%2C%202017%20medium%20scenario)/Population%20by%20age%20group%20to%202100%20(based%20on%20UNWPP%2C%202017%20medium%20scenario).csv",
 }
 
+D0 = "0D"
 D1 = "1D"
 D2 = "2D"
 
@@ -75,11 +81,20 @@ def get_age_data():
     return pd.DataFrame(new_groups).set_index("Location")
 
 
-def get_death_data(extend_by_days=0):
-    df_raw = pd.read_csv(SOURCE_DEATHS)
+age = get_age_data()
+age
+
+#%%
+def get_death_data(extend_by_days=0, smoothed=True):
+    # Smoothed data should lessen artifacts from data-reporting delays
+    death_column = "new_deaths_smoothed" if smoothed else "new_deaths"
+    path = Path(f"./cache/deaths_{TODAY}.pqt")
+    if path.exists():
+        df_raw = pd.read_parquet(path)
+    else:
+        df_raw = pd.read_csv(SOURCE_DEATHS)
+        df_raw.to_parquet(path, compression="gzip")
     df_raw["date"] = pd.to_datetime(df_raw["date"])
-    death_column = "new_deaths"
-    death_column = "new_deaths_smoothed"
     df = df_raw.pivot(index="date", columns="location", values=death_column)
     df = df.fillna(0)
     # Add additional rows on bottom
@@ -91,13 +106,74 @@ def get_death_data(extend_by_days=0):
     return df
 
 
+deaths = get_death_data()
+
+#%%
+def get_death_by_age_us():
+    df = pd.read_csv(DEATH_DISTRIBUTION)
+    # Only get data from 2020 because vaccination changes distribution in 2021
+    #! This will mess up things when most old people are vaccinated and distribution changes
+    df = df[df["Group"] == "By Year"]
+    df = df[df["Year"] == 2020]
+    df = df[df["State"] == "United States"]
+    df = df[df["Sex"] == "All Sexes"]
+    #
+    df = df.set_index("Age Group")[["COVID-19 Deaths"]].iloc[2:]
+    df = df.rename({"COVID-19 Deaths": "Deaths"}, axis=1)
+    # some age groups are overlapping (why???)
+    df = df.transpose()[
+        [
+            # "0-17 years",
+            "1-4 years",
+            "5-14 years",
+            "15-24 years",
+            # "18-29 years",
+            "25-34 years",
+            # "30-39 years",
+            "35-44 years",
+            # "40-49 years",
+            "45-54 years",
+            # "50-64 years",
+            "55-64 years",
+            "65-74 years",
+            "75-84 years",
+            "85 years and over",
+        ]
+    ].rename(
+        {
+            "1-4 years": "0-4",  # Mislabeled but matches with UN data and likely irrelevant
+            "5-14 years": "5-14",
+            "15-24 years": "15-24",
+            "25-34 years": "25-34",
+            "35-44 years": "35-44",
+            "45-54 years": "45-54",
+            "55-64 years": "55-64",
+            "65-74 years": "65-74",
+            "75-84 years": "75-84",
+            "85 years and over": "85-99",
+        },
+        axis=1,
+    )
+    df = df.transpose()
+    df["DeathShare"] = df["Deaths"] / df["Deaths"].sum()
+    return df
+
+
+dba = get_death_by_age_us()
+display(dba)
+display(dba.sum())
+
+
+#%%
+
+
 def get_vaccination_data(extend_by_days=0):
     """Load data from CSV and prepare it for use
 
     Args:
         extend_by_days (int, optional): Add days at end of DF, must be >= 0
     """
-    df_raw = pd.read_csv(SOURCE)
+    df_raw = pd.read_csv(SOURCE_VACCINATIONS)
     df_raw["date"] = pd.to_datetime(df_raw["date"])
     vac_pp_col = "daily_vaccinations_per_million"
     df = df_raw.pivot(index="date", columns="location", values=vac_pp_col)
@@ -115,21 +191,23 @@ def get_vaccination_data(extend_by_days=0):
 base_immunity = 0
 x = 21  # 3 weeks
 DAYS_BETWEEN_SHOTS = x
-eff_after_fst_x = 0.65
+eff_after_fst_x = 0.75
 y = 35  # 5 weeks
 eff_after_fst_y = 0.85
 z = 14  # 2 weeks
-eff_after_snd_z = 0.98
+eff_after_snd_z = 0.95
 total = x + y + z
 
 
 one_dose = [
     (0, base_immunity),
+    (7, base_immunity + 0.01),
     (x, eff_after_fst_x),
     (x + y, eff_after_fst_y),
 ]
 two_dose = [
     (0, 0),
+    (7, base_immunity + 0.01),
     (x, eff_after_fst_x),
     (x + z, eff_after_snd_z),
 ]
@@ -223,8 +301,8 @@ def calc_immunity_2d(df):
 
 
 countries = ["Austria", "United States", "United Kingdom"]
-dvs = get_vaccination_data(extend_by_days=100)[countries]
-dds = get_death_data(extend_by_days=100)[countries][dvs.index.min() :]
+dvs = get_vaccination_data(extend_by_days=15)[countries]
+dds = get_death_data(extend_by_days=15)[countries][dvs.index.min() :]
 dds = dds.ffill()
 
 imm1 = calc_immunity_1d(dvs)
@@ -268,10 +346,15 @@ def guesstimate_excess_deaths(imm1, imm2, deaths: pd.DataFrame, method):
         # f2 = 3 - f1  # the other one
         f1 = 1  # always use 1D and 2D
         f2 = 2  # always use 1D and 2D
+        scaled_deaths[(country, D0)] = (
+            (deaths[country] / (1 - imm[f2][country])).fillna(0).astype(int)
+        )
         scaled_deaths[(country, D1)] = (
-            deaths[country] / (1 - imm[f2][country]) * (1 - imm[f1][country])
-        ).astype(int)
-        scaled_deaths[(country, D2)] = deaths[country].astype(int)
+            (deaths[country] / (1 - imm[f2][country]) * (1 - imm[f1][country]))
+            .fillna(0)
+            .astype(int)
+        )
+        scaled_deaths[(country, D2)] = deaths[country].fillna(0).astype(int)
 
     df = pd.DataFrame(scaled_deaths)
     df.columns = pd.MultiIndex.from_tuples(df.columns)
@@ -290,8 +373,8 @@ cumsum.plot()
 cumsum.max()
 #%%%
 current_total_deaths = cumsum.loc["2021-03-20"].unstack()
-current_total_deaths["Benefit 1D"] = current_total_deaths[D2] - current_total_deaths[D1]
-
+for (x,y) in [(D1,D0), (D2,D0), (D1,D2)]:
+    current_total_deaths[f"{x} vs {y}"] = current_total_deaths[x] - current_total_deaths[y]
 print(current_total_deaths.to_markdown())
 
 

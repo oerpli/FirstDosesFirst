@@ -30,9 +30,9 @@ When reading those and similar articles as well as their sources, the overall im
 To expand a bit on that a subsection of each of these points.
 
 ### Weak after first dose, strong after second
-"Weak after first dose" is measured a few days after the vaccine is administered, i.e. before the immune system had enough time to build up immunity.
+"Weak after first dose" is measured a few days after the vaccine is administered, i.e. mostly before the immune system had enough time to build up immunity.
 This is measured as follows:
-- N persons are vaccinated at day x, half of them are given given a placebo
+- N persons believe they are vaccinated at day x, half of them are given only a placebo. 
 - Number of people that tested COVID positive after up to 14 days is 50% lower in vaccine group than the placebo group
 
 As the incubation period of COVID is approximately one week, people that develop symptoms in the first week were likely already infected when they were given the vaccine.
