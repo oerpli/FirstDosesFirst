@@ -7,9 +7,11 @@
 - [Results](#results)
   - [1st Approach: Only count vaccinations](#1st-approach-only-count-vaccinations)
   - [2nd Approach: Take age into account](#2nd-approach-take-age-into-account)
+    - [Disclaimer regarding this method](#disclaimer-regarding-this-method)
 
 ## Some notes
 - I use smoothed death statistics to reduce data-reporting related artifacts.
+- I assumed that the vaccination works the same for all age groups
 
 
 ## Vacination efficacy
@@ -94,4 +96,28 @@ I split the age brackets provided by the UN (0-14,15-64,65+) into sub brackets. 
 
 Furthermore, I split the deaths worldwide also with the same method into deaths by age bracket.
 The data for this was obtained by the CDC.
+The exact procedure for this was as follows:
+- Get age distribution for each country from UN
+- Split brackets into sub-brackets (e.g. 15-65 into 15-24, 25-34, ...) with the same distribution as found for the United States.
+- Get the death data for each of these brackets for the United States
+- Scale the deaths per age bracket of each country with the relative size of the corresponding age bracket of that country compared to US. Normalize this vector
+- Multiply it with the total number of deaths observed to get an estimated age-distribution of COVID deaths of each country
 
+### Disclaimer regarding this method
+From a few samples I took, this seemed to understate the concentration of deaths on older people.
+This seems to a peculiarity, others have found as well, e.g. [The Economist writes](https://www.economist.com/graphic-detail/2020/06/24/when-covid-19-deaths-are-analysed-by-age-america-is-an-outlier) 
+
+> American casualties tend to be younger than European ones, which has grim implications
+> 
+> In hard-hit rich countries, about 60% of all deaths from the disease are among people aged 80 and over. America [=US], however, is an exception. Data [...] show that the country’s death toll skews significantly younger
+>
+> There, people in their 80s account for less than half of all covid-19 deaths; people in their 40s, 50s and 60s, meanwhile, account for a significantly larger share of those who die. The median covid-19 sufferer in America is a 48-year-old; in Italy it is a 63-year-old.
+
+The result from this is that for countries where older people tend to die more from COVID compared to the US, my estimates tend to underestimate the effectiveness of all vaccination strategies (as long as they are prioritized in the right order). 
+
+For the analysis done here this means:
+
+- The difference between "no vaccine" and 2 doses is underestimated
+- The difference between "2 doses" and 1 dose is underestimated
+
+This is the case because results from vaccination efforts are more pronounced, if the actually-at-risk-of-dying population is smaller (because each vaccination has a larger impact on the factor `(1-i2) * (1-i1)` from above).
