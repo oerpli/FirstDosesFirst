@@ -239,15 +239,6 @@ for (x, y) in [(D2, D0), (D1, D0), (D1, D2)]:
 write_to_file(ANALYSIS_NOTES, "SimpleAnalysis", current_total_deaths.to_markdown())
 
 # %%
-#%%
-vacc = get_vaccination_data(per_million=False)
-age = get_age_data()
-
-
-def create_multi_index_age(age) -> pd.DataFrame:
-    pass
-
-
 def calc_immunity_1d_age():
     # Load data
     vacc = get_vaccination_data(per_million=False).astype(int)
@@ -303,9 +294,6 @@ def calc_immunity_1d_age():
     return result
 
 
-res = calc_immunity_1d_age()
-res
-# %%
 def calc_immunity_2d_age():
     # Load data
     vacc = get_vaccination_data(per_million=False).astype(int)
@@ -376,5 +364,38 @@ def calc_immunity_2d_age():
     return result
 
 
-res2d = calc_immunity_2d_age()
-# %%
+def guesstimate_excess_deaths(imm1, imm2, deaths: pd.DataFrame, method):
+    """Takes two estimated immunities and the resulting death count
+    and scales death count
+
+    Args:
+        immunity ([type]): [description]
+        deaths ([type]): [description]
+    """
+    start = imm1.index.min()
+    imm = [None, imm1, imm2]  # None to have 1D in [1] and 2D in [2]
+
+    countries = deaths.columns
+    scaled_deaths = dict()
+    for country in countries:
+        f1 = 1
+        f2 = 2
+        scaled_deaths[(country, D0)] = (
+            (deaths[country] / (1 - imm[f2][country])).fillna(0).astype(int)
+        )
+        scaled_deaths[(country, D1)] = (
+            (deaths[country] / (1 - imm[f2][country]) * (1 - imm[f1][country]))
+            .fillna(0)
+            .astype(int)
+        )
+        scaled_deaths[(country, D2)] = deaths[country].fillna(0).astype(int)
+
+    df = pd.DataFrame(scaled_deaths)
+    df.columns = pd.MultiIndex.from_tuples(df.columns)
+    # return pd.DataFrame(scaled_deaths).join(deaths, rsuffix="_orig")
+    return df
+
+
+if __name__ == "__main__":
+    imm1d_age = calc_immunity_1d_age()
+    imm2d_age = calc_immunity_2d_age()

@@ -236,24 +236,22 @@ def get_death_data_by_age() -> pd.DataFrame:
     age = get_age_data()
     age_t = age.transpose()
 
-    #%%
-    estimated = []
     us_distribution = age_t["United States"] / age_t["United States"].sum()
-    i = 0
-    for country in deaths.columns:
-        if country not in age_t:
-            print(f"Didn't find {country}")
-            # Mostly small countries
-            # Czechia, because it's sometimes called Czech Republic
-            # Serbia ?
-            # Kosovo ?
-            continue  # e.g. Andorra
+    countries = set(age.index) & set(deaths.columns)
+    # Mostly small countries are missing, but also:
+    # - Czechia, because it's sometimes called Czech Republic
+    # - Serbia ?
+    # - Kosovo ?
+    columns = dict()
+    for country in countries:
         age_distr = age_t[country] / age_t[country].sum()  # percentage in each bracket
         relative_to_us = age_distr / us_distribution  # not sure if this is a good idea
-        death_distr_x = relative_to_us * death_distr
-        death_distr_x = death_distr_x / death_distr_x.sum()
-        at_estimate_x = death_distr_x * deaths["Austria"].cumsum().iloc[-1]
-        at_estimate = death_distr * deaths["Austria"].cumsum().iloc[-1]
+        x = relative_to_us * death_distr
+        death_distr_x = x / x.sum()
+        for group in death_distr_x.index:
+            columns[(country, group)] = deaths[country] * death_distr_x[group]
+        columns
+    return pd.DataFrame(columns)
 
 
 # %%
