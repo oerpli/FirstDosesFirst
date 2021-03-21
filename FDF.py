@@ -1,4 +1,5 @@
 #%%
+import itertools
 from collections import defaultdict, deque
 from pathlib import Path
 
@@ -40,8 +41,10 @@ current_dosing = {
 at = "Austria"
 uk = "United Kingdom"
 us = "United States"
-iz = "Isreal"
-countries = ["Austria", "United States", "United Kingdom", "Germany", "Israel"]
+iz = "Israel"
+de = "Germany"
+
+countries = [at, us, uk, iz, de]
 
 
 #%% Load data
@@ -121,22 +124,10 @@ def calc_immunity_1d(df):
     for (_, row), i in zip(df.iterrows(), days):
         for country in cols:
             new_vac = row[country]
-            days_from_jab = [max(0, x - i) for x in range(num_days)]
-            result[country] += [x * new_vac for x in map(VACC.one_dose, days_from_jab)]
+            days_since = [max(0, x - i) for x in range(num_days)]
+            result[country] += [e * new_vac for e in map(VACC.one_dose, days_since)]
     result /= 1e6
     return result
-
-
-#%%
-vacc = get_vaccination_data(per_million=False)
-age = get_age_data()
-
-
-def calc_immunity_1d_age(vacc, age):
-    pass
-
-
-calc_immunity_1d_age(vacc, age)
 
 
 #%%
@@ -247,4 +238,64 @@ for (x, y) in [(D2, D0), (D1, D0), (D1, D2)]:
 
 write_to_file(ANALYSIS_NOTES, "SimpleAnalysis", current_total_deaths.to_markdown())
 
+# %%
+#%%
+vacc = get_vaccination_data(per_million=False)
+age = get_age_data()
+
+
+def create_multi_index_age(age) -> pd.DataFrame:
+    pass
+
+
+def calc_immunity_1d_age():
+    # only calc subset for now
+    cnt = [iz]  #  countries
+    vacc = get_vaccination_data(per_million=False)[cnt].astype(int)
+    age = get_age_data().loc[cnt]  #
+    # until here
+
+    age = age[reversed(age.columns)]  # most important groups first
+    cols = list(vacc.columns)  # countries
+    age_groups = list(age.columns)  # age brackets
+    new_cols = list(itertools.product(cols, age_groups))
+
+    result = pd.DataFrame(0, index=vacc.index, columns=new_cols)  # mean immunity [0,1]
+    need_1 = age.copy()  # had 1 dose
+    need_1[["0-4", "5-14"]] = 0  # young people don't get vaccine, tough luck!
+    # display(need_1)
+    result.columns = pd.MultiIndex.from_tuples(result.columns)
+    # display(result)
+    num_days = len(vacc)
+    days = np.arange(result.shape[0])
+    for (_, row), i in zip(vacc.iterrows(), days):
+        for country in cols:
+            new_vac = row[country]
+            n1 = need_1.loc[country]
+            get_one = []
+            for grp in age_groups:
+                need = n1[grp]
+                if need == 0:
+                    continue
+                # print(f"{grp}: {need} {new_vac}")
+                if need > new_vac:
+                    get_one.append((grp, new_vac))
+                    need_1.loc[country][grp] -= new_vac
+                    new_vac = 0
+                    break  # most important group not finished, break here
+                elif need > 0:
+                    get_one.append((grp, need))
+                    need_1.loc[country][grp] = 0
+                    new_vac -= need
+            days_since = [max(0, x - i) for x in range(num_days)]
+            for grp, n in get_one:
+                # n = number of vacc
+                # this must be normalized by size of group in question
+                p = n / age.loc[country][grp]
+                result[country, grp] += [e * p for e in map(VACC.one_dose, days_since)]
+    return result
+
+
+res = calc_immunity_1d_age()
+res
 # %%

@@ -46,16 +46,17 @@ def write_to_file(file, name, value):
     file.write_text(repl)
 
 
-def write_img_to_file(file, name, path: Path, caption=""):
+def write_img_to_file(file, name, path: Path, alt_text="", caption=""):
     path = path.relative_to(OUT_FOLDER)
     x = str(path).replace("\\", "/")
-    print(x)
-    img_tag = f"![{caption}]({x})"
+    # print(x)
+    c = f"{caption}\n".strip() # empty if caption is empty
+    img_tag = f"{c}![{alt_text}]({x})"
     write_to_file(file, name, img_tag)
 
 
 # %%
-def get_data_with_cache(name):
+def get_data_with_cache(name) -> pd.DataFrame:
     source = DATA[name]
     if isinstance(source, Path):
         return pd.read_csv(source)
@@ -69,10 +70,10 @@ def get_data_with_cache(name):
             df_raw.to_parquet(path, compression="gzip")
         return df_raw
     else:
-        print("Source must be either string or Path")
+        raise Exception("Source must be either string or Path")
 
 
-def get_vaccination_data(extend_by_days=0, per_million=True):
+def get_vaccination_data(extend_by_days=0, per_million=True) -> pd.DataFrame:
     """Load data from CSV and prepare it for use
 
     Args:
@@ -93,7 +94,7 @@ def get_vaccination_data(extend_by_days=0, per_million=True):
     return df
 
 
-def get_death_data(extend_by_days=0, smoothed=True):
+def get_death_data(extend_by_days=0, smoothed=True) -> pd.DataFrame:
     # Smoothed data should lessen artifacts from data-reporting delays
     death_column = "new_deaths_smoothed" if smoothed else "new_deaths"
     df_raw = get_data_with_cache(Sources.Deaths)
@@ -109,7 +110,7 @@ def get_death_data(extend_by_days=0, smoothed=True):
     return df
 
 
-def get_death_distr_by_age_us():
+def get_death_distr_by_age_us() -> pd.DataFrame:
     df = get_data_with_cache(Sources.DeathsByAge)
     # Only get data from 2020 because vaccination changes distribution in 2021
     #! This will mess up things when most old people are vaccinated and distribution changes
@@ -159,10 +160,7 @@ def get_death_distr_by_age_us():
     return df
 
 
-#%%
-
-
-def get_age_data():
+def get_age_data() -> pd.DataFrame:
     #%% get raw data from owid (source is UN afaik)
     df = get_data_with_cache(Sources.Demographics)
     df = df[df.Year == 2020]
@@ -214,61 +212,50 @@ def get_age_data():
     for group, subgroups in age_factors.items():
         for (lower, upper), factor in subgroups.items():
             new_groups[f"{lower}-{upper}"] = (df[group] * factor).astype(int)
-    return pd.DataFrame(new_groups).set_index("Location")
+    # as death data 10y intervals, recalculate those brackets:
+    df = pd.DataFrame(new_groups).set_index("Location")
+    ages_new_brackets = {
+        "0-4": ["0-4"],
+        "5-14": ["5-9", "10-14"],
+        "15-24": ["15-19", "20-24"],
+        "25-34": ["25-29", "30-34"],
+        "35-44": ["35-39", "40-44"],
+        "45-54": ["45-49", "50-54"],
+        "55-64": ["55-59", "60-64"],
+        "65-74": ["65-69", "70-74"],
+        "75-84": ["75-79", "80-84"],
+        "85-99": ["85-99"],
+    }
+    return pd.DataFrame({k: df[v].sum(axis=1) for k, v in ages_new_brackets.items()})
 
-
-# %%
-
-# %%
-#%%
-def get_death_data_by_age():
-    pass
-
-
-#%%
-death_distr = get_death_distr_by_age_us().transpose().loc["DeathShare"]
-deaths = get_death_data()
-age = get_age_data()
-ages_new_brackets = {
-    "0-4": ["0-4"],
-    "5-14": ["5-9", "10-14"],
-    "15-24": ["15-19", "20-24"],
-    "25-34": ["25-29", "30-34"],
-    "35-44": ["35-39", "40-44"],
-    "45-54": ["45-49", "50-54"],
-    "55-64": ["55-59", "60-64"],
-    "65-74": ["65-69", "70-74"],
-    "75-84": ["75-79", "80-84"],
-    "85-99": ["85-99"],
-}
-age_t = pd.DataFrame(
-    {k: age[v].sum(axis=1) for k, v in ages_new_brackets.items()}
-).transpose()
 
 #%%
-estimated = []
-us_distribution = age_t["United States"] / age_t["United States"].sum()
-i = 0
-for country in deaths.columns:
-    if country not in age_t:
-        print(f"Didn't find {country}")
-        # Mostly small countries
-        # Czechia, because it's sometimes called Czech Republic
-        # Serbia ?
-        # Kosovo ?
-        continue  # e.g. Andorra
-    age_distr = age_t[country] / age_t[country].sum()  # percentage in each bracket
-    relative_to_us = age_distr / us_distribution  # not sure if this is a good idea
-    death_distr_x = relative_to_us * death_distr
-    death_distr_x = death_distr_x / death_distr_x.sum()
-    at_estimate_x = death_distr_x * deaths["Austria"].cumsum().iloc[-1]
-    at_estimate = death_distr * deaths["Austria"].cumsum().iloc[-1]
-    display(at_estimate)
-    display(at_estimate_x)
+def get_death_data_by_age() -> pd.DataFrame:
+    death_distr = get_death_distr_by_age_us().transpose().loc["DeathShare"]
+    deaths = get_death_data()
+    age = get_age_data()
+    age_t = age.transpose()
 
-    i += 1
-    if i > 10:
-        break
+    #%%
+    estimated = []
+    us_distribution = age_t["United States"] / age_t["United States"].sum()
+    i = 0
+    for country in deaths.columns:
+        if country not in age_t:
+            print(f"Didn't find {country}")
+            # Mostly small countries
+            # Czechia, because it's sometimes called Czech Republic
+            # Serbia ?
+            # Kosovo ?
+            continue  # e.g. Andorra
+        age_distr = age_t[country] / age_t[country].sum()  # percentage in each bracket
+        relative_to_us = age_distr / us_distribution  # not sure if this is a good idea
+        death_distr_x = relative_to_us * death_distr
+        death_distr_x = death_distr_x / death_distr_x.sum()
+        at_estimate_x = death_distr_x * deaths["Austria"].cumsum().iloc[-1]
+        at_estimate = death_distr * deaths["Austria"].cumsum().iloc[-1]
+
+
 # %%
 
 
