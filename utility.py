@@ -50,7 +50,7 @@ def write_img_to_file(file, name, path: Path, alt_text="", caption=""):
     path = path.relative_to(OUT_FOLDER)
     x = str(path).replace("\\", "/")
     # print(x)
-    c = f"{caption}\n".strip() # empty if caption is empty
+    c = f"{caption}\n".strip()  # empty if caption is empty
     img_tag = f"{c}![{alt_text}]({x})"
     write_to_file(file, name, img_tag)
 

@@ -122,9 +122,9 @@ def calc_immunity_1d(df):
     days = np.arange(result.shape[0])
     cols = list(df.columns)
     for (_, row), i in zip(df.iterrows(), days):
+        days_since = [max(0, x - i) for x in range(num_days)]
         for country in cols:
             new_vac = row[country]
-            days_since = [max(0, x - i) for x in range(num_days)]
             result[country] += [e * new_vac for e in map(VACC.one_dose, days_since)]
     result /= 1e6
     return result
@@ -149,6 +149,7 @@ def calc_immunity_2d(df):
     days = np.arange(result.shape[0])
     cols = list(df.columns)
     for (_, row), i in zip(df.iterrows(), days):
+        days_since = [max(0, x - i) for x in range(num_days)]
         for country in cols:
             backlog = BACKLOG[country]  # get backlog of country
             need_2nd = backlog.popleft()  # remove first
@@ -162,7 +163,6 @@ def calc_immunity_2d(df):
             else:
                 new_vac_on_day = total_vacs_of_day - need_2nd
             backlog.append(new_vac_on_day)  # add new one
-            days_since = [max(0, x - i) for x in range(num_days)]
             result[country] += [
                 e * new_vac_on_day for e in map(VACC.two_dose, days_since)
             ]
@@ -249,28 +249,29 @@ def create_multi_index_age(age) -> pd.DataFrame:
 
 
 def calc_immunity_1d_age():
-    # only calc subset for now
-    cnt = [iz]  #  countries
-    vacc = get_vaccination_data(per_million=False)[cnt].astype(int)
-    age = get_age_data().loc[cnt]  #
-    # until here
+    # Load data
+    vacc = get_vaccination_data(per_million=False).astype(int)
+    age = get_age_data()  #
 
-    age = age[reversed(age.columns)]  # most important groups first
-    cols = list(vacc.columns)  # countries
-    age_groups = list(age.columns)  # age brackets
+    # Make 2 tier index & change order of age-brackets
+    cols = set(vacc.columns) & set(age.index)  # countries available in both datasets
+    age_groups = list(reversed(age.columns))  # age brackets
+    age = age[age_groups]  # most important groups first
     new_cols = list(itertools.product(cols, age_groups))
-
-    result = pd.DataFrame(0, index=vacc.index, columns=new_cols)  # mean immunity [0,1]
-    need_1 = age.copy()  # had 1 dose
+    result = pd.DataFrame(0, index=vacc.index, columns=new_cols)  # immunity [0,1]
+    need_1 = age.copy()  # needs 1 dose
     need_1[["0-4", "5-14"]] = 0  # young people don't get vaccine, tough luck!
-    # display(need_1)
     result.columns = pd.MultiIndex.from_tuples(result.columns)
-    # display(result)
+    #
     num_days = len(vacc)
     days = np.arange(result.shape[0])
-    for (_, row), i in zip(vacc.iterrows(), days):
+    for (day, row), i in zip(vacc.iterrows(), days):
+        days_since = [max(0, x - i) for x in range(num_days)]
         for country in cols:
             new_vac = row[country]
+            if country not in need_1.index:
+                print(country)
+                continue
             n1 = need_1.loc[country]
             get_one = []
             for grp in age_groups:
@@ -287,15 +288,93 @@ def calc_immunity_1d_age():
                     get_one.append((grp, need))
                     need_1.loc[country][grp] = 0
                     new_vac -= need
-            days_since = [max(0, x - i) for x in range(num_days)]
+            if new_vac:
+                print(country, new_vac)
             for grp, n in get_one:
                 # n = number of vacc
                 # this must be normalized by size of group in question
                 p = n / age.loc[country][grp]
                 result[country, grp] += [e * p for e in map(VACC.one_dose, days_since)]
+    for c in cols:
+        # calculate weighted mean immunisation for whole countries
+        population = age.loc[c]
+        element_wise_mult = (result[c] * population[age_groups]).sum(axis=1)
+        result[c, "Total"] = element_wise_mult / age.loc[c].sum()
     return result
 
 
 res = calc_immunity_1d_age()
 res
+# %%
+def calc_immunity_2d_age():
+    # Load data
+    vacc = get_vaccination_data(per_million=False).astype(int)
+    age = get_age_data()  #
+
+    # Make 2 tier index & change order of age-brackets
+    cols = set(vacc.columns) & set(age.index)  # countries available in both datasets
+    age_groups = list(reversed(age.columns))  # age brackets
+    age = age[age_groups]  # most important groups first
+    new_cols = list(itertools.product(cols, age_groups))
+    result = pd.DataFrame(0, index=vacc.index, columns=new_cols)  # immunity [0,1]
+    need_1 = age.copy()  # needs 1 dose
+    need_1[["0-4", "5-14"]] = 0  # young people don't get vaccine, tough luck!
+    result.columns = pd.MultiIndex.from_tuples(result.columns)
+    #
+    num_days = len(vacc)
+    days = np.arange(result.shape[0])
+    BACKLOG = defaultdict(lambda: deque([0] * VACC.days_between_shots))
+    for (day, row), i in zip(vacc.iterrows(), days):
+        days_since = [max(0, x - i) for x in range(num_days)]
+        for country in cols:
+            # Add backlog mechanism from calc_immunity_2d above
+            backlog = BACKLOG[country]  # get backlog of country
+            need_2nd = backlog.popleft()  # remove first
+            total_vacs_of_day = row[country]
+            if need_2nd > total_vacs_of_day:
+                new_vac_on_day = 0
+                # give vacc to those that need 2nd shot
+                # and add remaining to backlog for next day
+                didnt_get_second = need_2nd - total_vacs_of_day
+                backlog[0] += didnt_get_second
+            else:
+                new_vac_on_day = total_vacs_of_day - need_2nd
+            backlog.append(new_vac_on_day)  # add new one
+
+            new_vac = new_vac_on_day
+            if country not in need_1.index:
+                print(country)
+                continue
+            n1 = need_1.loc[country]
+            get_one = []
+            for grp in age_groups:
+                need = n1[grp]
+                if need == 0:
+                    continue
+                # print(f"{grp}: {need} {new_vac}")
+                if need > new_vac:
+                    get_one.append((grp, new_vac))
+                    need_1.loc[country][grp] -= new_vac
+                    new_vac = 0
+                    break  # most important group not finished, break here
+                elif need > 0:
+                    get_one.append((grp, need))
+                    need_1.loc[country][grp] = 0
+                    new_vac -= need
+            if new_vac:
+                print(country, new_vac)
+            for grp, n in get_one:
+                # n = number of vacc
+                # this must be normalized by size of group in question
+                p = n / age.loc[country][grp]
+                result[country, grp] += [e * p for e in map(VACC.two_dose, days_since)]
+    for c in cols:
+        # calculate weighted mean immunisation for whole countries
+        population = age.loc[c]
+        element_wise_mult = (result[c] * population[age_groups]).sum(axis=1)
+        result[c, "Total"] = element_wise_mult / age.loc[c].sum()
+    return result
+
+
+res2d = calc_immunity_2d_age()
 # %%

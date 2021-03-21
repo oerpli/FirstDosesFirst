@@ -13,6 +13,7 @@
 ## Some notes
 - I use smoothed death statistics to reduce data-reporting related artifacts.
 - I assumed that the vaccination works the same for all age groups
+- I don't consider the lag between infection and death as I have no idea what would be a suitable value there. If one would like to add a delay of `n` days, it might be enough to stretch out the first segment of the vaccine-efficacy curve, i.e. instead of 75% after 21 days, you then have 75% after n + 21 days etc. 
 
 
 ## Vacination efficacy
@@ -20,25 +21,25 @@ I defined some points with "reasonable" numbers for efficacy after x days and co
 
 [//]: # (EfficacyTable)
 
-|   days |   1D (%) |   2D (%) |
-|-------:|---------:|---------:|
-|      0 |        0 |        0 |
-|      3 |        0 |        0 |
-|      6 |        0 |        0 |
-|      9 |       11 |       11 |
-|     12 |       27 |       27 |
-|     15 |       43 |       43 |
-|     18 |       59 |       59 |
-|     21 |       75 |       75 |
-|     24 |       75 |       79 |
-|     27 |       76 |       83 |
-|     30 |       77 |       87 |
-|     33 |       78 |       92 |
-|     36 |       79 |       95 |
-|     39 |       80 |       95 |
-|     42 |       81 |       95 |
-|     45 |       81 |       95 |
-|     48 |       82 |       95 |
+| days | 1D (%) | 2D (%) |
+| ---: | -----: | -----: |
+|    0 |      0 |      0 |
+|    3 |      0 |      0 |
+|    6 |      0 |      0 |
+|    9 |     11 |     11 |
+|   12 |     27 |     27 |
+|   15 |     43 |     43 |
+|   18 |     59 |     59 |
+|   21 |     75 |     75 |
+|   24 |     75 |     79 |
+|   27 |     76 |     83 |
+|   30 |     77 |     87 |
+|   33 |     78 |     92 |
+|   36 |     79 |     95 |
+|   39 |     80 |     95 |
+|   42 |     81 |     95 |
+|   45 |     81 |     95 |
+|   48 |     82 |     95 |
 
 [//]: # (EfficacyTable)
 
@@ -89,13 +90,13 @@ My initial approach was to just do the following:
 
 [//]: # (SimpleAnalysis)
 
-|                |     0D |     1D |     2D |   2D vs 0D |   1D vs 0D |   1D vs 2D |
-|:---------------|-------:|-------:|-------:|-----------:|-----------:|-----------:|
-| Austria        |   4850 |   4807 |   4822 |         28 |         43 |         15 |
-| Germany        |  54069 |  53476 |  53595 |        474 |        593 |        119 |
-| Israel         |   3958 |   2763 |   3067 |        891 |       1195 |        304 |
-| United Kingdom |  66152 |  62664 |  63352 |       2800 |       3488 |        688 |
-| United States  | 253033 | 242939 | 245051 |       7982 |      10094 |       2112 |
+|                |     0D |     1D |     2D | 2D vs 0D | 1D vs 0D | 1D vs 2D |
+| :------------- | -----: | -----: | -----: | -------: | -------: | -------: |
+| Austria        |   4850 |   4807 |   4822 |       28 |       43 |       15 |
+| Germany        |  54069 |  53476 |  53595 |      474 |      593 |      119 |
+| Israel         |   3958 |   2763 |   3067 |      891 |     1195 |      304 |
+| United Kingdom |  66152 |  62664 |  63352 |     2800 |     3488 |      688 |
+| United States  | 253033 | 242939 | 245051 |     7982 |    10094 |     2112 |
 
 [//]: # (SimpleAnalysis)
 
