@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 
 from utility import (
+    get_data_with_cache,
+    Sources,
     get_age_data,
     get_death_data,
     get_death_distr_by_age_us,
@@ -32,72 +34,67 @@ current_dosing = {
 at = "Austria"
 uk = "United Kingdom"
 us = "United States"
+iz = "Isreal"
+countries = ["Austria", "United States", "United Kingdom", "Germany", "Israel"]
 
 
+#%% Load data
 age = get_age_data()
-age
-
-#%%
-
 deaths = get_death_data()
-
-#%%
-
-
 deaths_by_age = get_death_distr_by_age_us()
-deaths_by_age
-
-#%%
 
 
 # %% Data for Immunity stemming from Vaccination:
+# TODO: This should be made somehow less shitty s.t it is easy to plop in a replacement
+# immunity-curve to see results
+class VaccineEfficacy:
+    def __init__(self) -> None:
+        self.days_between_shots = 21
+        base_immunity = 0
+        x = self.days_between_shots
+        eff_after_fst_x = 0.75
+        y = 35  # 5 weeks
+        eff_after_fst_y = 0.85
+        z = 14  # 2 weeks
+        eff_after_snd_z = 0.95
+        total = x + y + z
+        first_dose = [
+            (0, base_immunity),
+            (7, base_immunity + 0.005), # very very small gain in first week after shot
+            (x, eff_after_fst_x),
+        ]
 
-base_immunity = 0
-x = 21  # 3 weeks
-DAYS_BETWEEN_SHOTS = x
-eff_after_fst_x = 0.75
-y = 35  # 5 weeks
-eff_after_fst_y = 0.85
-z = 14  # 2 weeks
-eff_after_snd_z = 0.95
-total = x + y + z
+        # In either case, vacc starts with 1st dose and divergence happens after ~3 weeks
+        one_dose = [*first_dose, (x + y, eff_after_fst_y)]
+        two_dose = [*first_dose, (x + z, eff_after_snd_z)]
+
+        days = pd.DataFrame({"days": list(range(total))}).set_index("days")
+        self.eff_1d = pd.DataFrame(one_dose, columns=["days", "one_dose"]).set_index("days")
+        self.eff_2d = pd.DataFrame(two_dose, columns=["days", "two_dose"]).set_index("days")
+
+        # create df from interpolation of data points
+        self.efficacy = days.join(self.eff_1d).join(self.eff_2d).sort_index().interpolate(axis=0)
+    
+    def print_table(self):
+        tmp = (self.efficacy.iloc[:50:3] * 100).astype(int)
+        write_to_file(ANALYSIS_NOTES, "EfficacyTable", tmp.to_markdown())
+
+    def get_eff(self, doses, days):
+        x = self.efficacy.one_dose if doses == 1 else self.efficacy.two_dose
+        if days > len(self.efficacy) -1:
+            return x.max()
+        else:
+            return x[days]
+    
+    def one_dose(self, x):
+        return self.get_eff(1,x)
+    
+    def two_dose(self,x ):
+        return self.get_eff(2,x)
 
 
-# In either case, vacc starts with 7st dose and divergence happens after ~3 weeks
-first_dose = [
-    (0, base_immunity),
-    (7, base_immunity + 0.005),
-    (x, eff_after_fst_x),
-]
 
-one_dose = [*first_dose, (x + y, eff_after_fst_y)]
-two_dose = [*first_dose, (x + z, eff_after_snd_z)]
-
-days = pd.DataFrame({"days": list(range(total))}).set_index("days")
-eff_1d = pd.DataFrame(one_dose, columns=["days", "one_dose"]).set_index("days")
-eff_2d = pd.DataFrame(two_dose, columns=["days", "two_dose"]).set_index("days")
-
-# create df from interpolation of data points
-combined = days.join(eff_1d).join(eff_2d).sort_index().interpolate(axis=0)
-
-
-efficacy_table = (combined.iloc[:50:3] * 100).astype(int)
-write_to_file(ANALYSIS_NOTES, "EfficacyTable", efficacy_table.to_markdown())
-#%%
-
-# function to get expected immunity after n days for 1d/2d regime
-def get_eff(doses, days):
-    x = combined.one_dose if doses == 1 else combined.two_dose
-    if days > len(combined) - 1:
-        return x.max()
-    else:
-        return x[days]
-
-
-# for ease of use
-one_dose = lambda x: get_eff(1, x)
-two_dose = lambda x: get_eff(2, x)
-
+VACC = VaccineEfficacy()
 
 # %% Calculate immunity from two regimes
 
@@ -120,12 +117,22 @@ def calc_immunity_1d(df):
         for country in cols:
             new_vac = row[country]
             days_from_jab = [max(0, x - i) for x in range(num_days)]
-            result[country] += [x * new_vac for x in map(one_dose, days_from_jab)]
+            result[country] += [x * new_vac for x in map(VACC.one_dose, days_from_jab)]
             TOTAL_VAC[(country, D1)].append(new_vac)
             TOTAL_JAB[(country, D1)].append(new_vac)
     result /= 1e6
     return result
 
+#%%
+vacc = get_vaccination_data(per_million=False)
+age = get_age_data()
+def calc_immunity_1d_age(vacc, age):
+    pass
+calc_immunity_1d_age(vacc,age)
+
+
+
+#%%
 
 def calc_immunity_2d(df):
     """Does the same as `calc_immunity_1d` for two doses.
@@ -136,7 +143,7 @@ def calc_immunity_2d(df):
         - on day Y 100 vaccs, 105 on backlog: no new doses, but 5 remain, put 5 on backlog of Y+1
     """
     # Init backlog with all zeros
-    BACKLOG = defaultdict(lambda: deque([0] * DAYS_BETWEEN_SHOTS))
+    BACKLOG = defaultdict(lambda: deque([0] * VACC.days_between_shots))
     df_columns = list(df.columns)
     result = pd.DataFrame(0, index=df.index, columns=df_columns)
     num_days = len(df)
@@ -158,7 +165,7 @@ def calc_immunity_2d(df):
             backlog.append(new_vac_on_day)  # add new one
             days_from_jab = [max(0, x - i) for x in range(num_days)]
             result[country] += [
-                x * new_vac_on_day for x in map(two_dose, days_from_jab)
+                x * new_vac_on_day for x in map(VACC.two_dose, days_from_jab)
             ]
             TOTAL_VAC[(country, D2)].append(new_vac_on_day)
             TOTAL_JAB[(country, D2)].append(total_vacs_of_day)
@@ -166,7 +173,6 @@ def calc_immunity_2d(df):
     return result
 
 
-countries = ["Austria", "United States", "United Kingdom", "Germany"]
 dvs = get_vaccination_data(extend_by_days=15)[countries]
 dds = get_death_data(extend_by_days=15)[countries][dvs.index.min() :]
 dds = dds.ffill()
@@ -218,6 +224,10 @@ def guesstimate_excess_deaths(imm1, imm2, deaths: pd.DataFrame, method):
     return df
 
 
+def simple_analysis():
+    pass
+
+
 ed = guesstimate_excess_deaths(imm1, imm2, dds, current_dosing)
 ed[at].cumsum().plot()
 ed[us].cumsum().plot()
@@ -236,29 +246,3 @@ for (x, y) in [(D2, D0), (D1, D0), (D1, D2)]:
 
 write_to_file(ANALYSIS_NOTES, "SimpleAnalysis", current_total_deaths.to_markdown())
 
-
-#%%
-age = get_age_data()
-age
-
-
-def get_risk_by_age():
-    # data from CDC
-    # https://www.cdc.gov/coronavirus/2019-ncov/images/need-extra-precautions/319360-A_COVID-19_RiskForSevereDisease_Race_Age_2.18_p1.jpg
-    # tuples denote inclusive ranges
-    age_risk_factor = {
-        (0, 4): 2,  # X
-        (5, 17): 1,  # reference group A
-        (18, 29): 15,  # B
-        (30, 39): 45,  # C
-        (40, 49): 130,  # D
-        (50, 64): 400,  # E
-        (65, 74): 1100,  # F
-        (75, 84): 2800,  # G
-        (85, 99): 7900,  # H
-    }
-
-
-# %%
-
-# %%

@@ -3,7 +3,6 @@ from datetime import datetime
 
 import re
 from pathlib import Path
-from numpy import isin
 import pandas as pd
 import numpy as np
 
@@ -18,16 +17,25 @@ DATA = {
     "population": r"https://raw.githubusercontent.com/owid/owid-datasets/master/datasets/Population%20by%20age%20group%20to%202100%20(based%20on%20UNWPP%2C%202017%20medium%20scenario)/Population%20by%20age%20group%20to%202100%20(based%20on%20UNWPP%2C%202017%20medium%20scenario).csv",
 }
 
+from enum import Enum
+
+
+class Sources(Enum):
+    Vaccinations = 1
+    Deaths = 2
+    DeathsByAge = 3
+    Demographics = 4
+
 
 DATA = {
     # OWID
-    "vaccinations": r"https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/vaccinations/vaccinations.csv",
+    Sources.Vaccinations: r"https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/vaccinations/vaccinations.csv",
     # OWID, no idea from where
-    "deaths": r"https://covid.ourworldindata.org/data/owid-covid-data.csv",
+    Sources.Deaths: r"https://covid.ourworldindata.org/data/owid-covid-data.csv",
     # CDC https://data.cdc.gov/NCHS/Provisional-COVID-19-Death-Counts-by-Sex-Age-and-S/9bhg-hcku/
-    "deaths_by_age": Path(r"./data/death_count_by_age.csv"),
+    Sources.DeathsByAge: Path(r"./data/death_count_by_age.csv"),
     # OWID, based on UN data
-    "demographics": Path(r"./data/owid-population.csv"),
+    Sources.Demographics: Path(r"./data/owid-population.csv"),
 }
 
 
@@ -43,6 +51,11 @@ def write_to_file(file, name, value):
     # print("===================")
     repl = re.sub(pattern_full, rf"\1\n\n{value.strip()}\n\n\3", file_content)
     file.write_text(repl)
+
+
+def write_img_to_file(file, name, path, caption=""):
+    img_tag = f"![{caption}]({path})"
+    write_to_file(file, name, img_tag)
 
 
 # %%
@@ -63,15 +76,15 @@ def get_data_with_cache(name):
         print("Source must be either string or Path")
 
 
-def get_vaccination_data(extend_by_days=0):
+def get_vaccination_data(extend_by_days=0, per_million = True):
     """Load data from CSV and prepare it for use
 
     Args:
         extend_by_days (int, optional): Add days at end of DF, must be >= 0
     """
-    df_raw = get_data_with_cache("vaccinations")
+    df_raw = get_data_with_cache(Sources.Vaccinations)
     df_raw["date"] = pd.to_datetime(df_raw["date"])
-    vac_pp_col = "daily_vaccinations_per_million"
+    vac_pp_col = "daily_vaccinations_per_million" if per_million else "daily_vaccinations"
     df = df_raw.pivot(index="date", columns="location", values=vac_pp_col)
     df = df.fillna(0)
     # Add additional rows on bottom
@@ -85,7 +98,7 @@ def get_vaccination_data(extend_by_days=0):
 def get_death_data(extend_by_days=0, smoothed=True):
     # Smoothed data should lessen artifacts from data-reporting delays
     death_column = "new_deaths_smoothed" if smoothed else "new_deaths"
-    df_raw = get_data_with_cache("deaths")
+    df_raw = get_data_with_cache(Sources.Deaths)
     df_raw["date"] = pd.to_datetime(df_raw["date"])
     df = df_raw.pivot(index="date", columns="location", values=death_column)
     df = df.fillna(0)
@@ -99,7 +112,7 @@ def get_death_data(extend_by_days=0, smoothed=True):
 
 
 def get_death_distr_by_age_us():
-    df = get_data_with_cache("deaths_by_age")
+    df = get_data_with_cache(Sources.DeathsByAge)
     # Only get data from 2020 because vaccination changes distribution in 2021
     #! This will mess up things when most old people are vaccinated and distribution changes
     df = df[df["Group"] == "By Year"]
@@ -153,7 +166,7 @@ def get_death_distr_by_age_us():
 
 def get_age_data():
     #%% get raw data from owid (source is UN afaik)
-    df = get_data_with_cache("demographics")
+    df = get_data_with_cache(Sources.Demographics)
     df = df[df.Year == 2020]
     # rename columns to be less wordy
     rename = {
@@ -247,11 +260,11 @@ for country in deaths.columns:
         # Kosovo ?
         continue  # e.g. Andorra
     age_distr = age_t[country] / age_t[country].sum()  # percentage in each bracket
-    relative_to_us = age_distr / us_distribution # not sure if this is a good idea
-    death_distr_x = relative_to_us *  death_distr
+    relative_to_us = age_distr / us_distribution  # not sure if this is a good idea
+    death_distr_x = relative_to_us * death_distr
     death_distr_x = death_distr_x / death_distr_x.sum()
-    at_estimate_x = death_distr_x * deaths['Austria'].cumsum().iloc[-1]
-    at_estimate  = death_distr *  deaths['Austria'].cumsum().iloc[-1]
+    at_estimate_x = death_distr_x * deaths["Austria"].cumsum().iloc[-1]
+    at_estimate = death_distr * deaths["Austria"].cumsum().iloc[-1]
     display(at_estimate)
     display(at_estimate_x)
 
@@ -259,3 +272,21 @@ for country in deaths.columns:
     if i > 10:
         break
 # %%
+
+
+
+def get_risk_by_age():
+    # data from CDC
+    # https://www.cdc.gov/coronavirus/2019-ncov/images/need-extra-precautions/319360-A_COVID-19_RiskForSevereDisease_Race_Age_2.18_p1.jpg
+    # tuples denote inclusive ranges
+    age_risk_factor = {
+        (0, 4): 2,  # X
+        (5, 17): 1,  # reference group A
+        (18, 29): 15,  # B
+        (30, 39): 45,  # C
+        (40, 49): 130,  # D
+        (50, 64): 400,  # E
+        (65, 74): 1100,  # F
+        (75, 84): 2800,  # G
+        (85, 99): 7900,  # H
+    }
