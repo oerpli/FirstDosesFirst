@@ -81,7 +81,7 @@ eff_2d = pd.DataFrame(two_dose, columns=["days", "two_dose"]).set_index("days")
 combined = days.join(eff_1d).join(eff_2d).sort_index().interpolate(axis=0)
 
 
-efficacy_table = (combined.iloc[:40:3] * 100).astype(int)
+efficacy_table = (combined.iloc[:50:3] * 100).astype(int)
 write_to_file(ANALYSIS_NOTES, "EfficacyTable", efficacy_table.to_markdown())
 #%%
 

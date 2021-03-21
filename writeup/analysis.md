@@ -7,7 +7,8 @@
 - [Results](#results)
   - [1st Approach: Only count vaccinations](#1st-approach-only-count-vaccinations)
   - [2nd Approach: Take age into account](#2nd-approach-take-age-into-account)
-    - [Disclaimer regarding this method](#disclaimer-regarding-this-method)
+    - [Note regarding the estimated age distribution of COVID deaths](#note-regarding-the-estimated-age-distribution-of-covid-deaths)
+    - [Note regarding simplified distribution](#note-regarding-simplified-distribution)
 
 ## Some notes
 - I use smoothed death statistics to reduce data-reporting related artifacts.
@@ -35,6 +36,9 @@ I defined some points with "reasonable" numbers for efficacy after x days and co
 |     33 |         78 |         92 |
 |     36 |         79 |         95 |
 |     39 |         80 |         95 |
+|     42 |         81 |         95 |
+|     45 |         81 |         95 |
+|     48 |         82 |         95 |
 
 [//]: # (EfficacyTable)
 
@@ -52,17 +56,17 @@ I refer to the immunity from the different strategies as `ix`, i.e. `i1`, `i2` &
 Therefore, if a country is using a two dose vaccination strategy, I estimate the number of deaths from a one dose strategy as follows:
 ```
 D2          = (1-i2) * P * r
-D2 / (1-i2) = P * r                      (1)
+D2 / (1-i2) = P * r                             (1)
 ```
 and also:
 ```
 D1          = (1-i1) * P * r 
-D1 / (1-i1) = P * r                      (2)
+D1 / (1-i1) = P * r                             (2)
 ```
 Combining (1) and (2) results in
 ```
 D1 / (1-i1) = P * r = D2 / (1-i2)
-D1                  = D2 / (1-i2) * (1-i1)
+D1                  = D2 / (1-i2) * (1-i1)      (3)
 ```
 The same approach is used to estimate D0.
 
@@ -81,10 +85,10 @@ My initial approach was to just do the following:
 
 |                |     0D |     1D |     2D |   2D vs 0D |   1D vs 0D |   1D vs 2D |
 |:---------------|-------:|-------:|-------:|-----------:|-----------:|-----------:|
-| Austria        |   4793 |   4753 |   4767 |         26 |         40 |         14 |
-| Germany        |  53680 |  53113 |  53224 |        456 |        567 |        111 |
-| United Kingdom |  65924 |  62495 |  63161 |       2763 |       3429 |        666 |
-| United States  | 250379 | 240787 | 242745 |       7634 |       9592 |       1958 |
+| Austria        |   4850 |   4807 |   4822 |         28 |         43 |         15 |
+| Germany        |  54069 |  53476 |  53595 |        474 |        593 |        119 |
+| United Kingdom |  66152 |  62664 |  63352 |       2800 |       3488 |        688 |
+| United States  | 253033 | 242939 | 245051 |       7982 |      10094 |       2112 |
 
 [//]: # (SimpleAnalysis)
 
@@ -103,7 +107,14 @@ The exact procedure for this was as follows:
 - Scale the deaths per age bracket of each country with the relative size of the corresponding age bracket of that country compared to US. Normalize this vector
 - Multiply it with the total number of deaths observed to get an estimated age-distribution of COVID deaths of each country
 
-### Disclaimer regarding this method
+The remaining analysis is similar as before, with the following differences:
+
+- Each country is split up into sub populations based on their age bracket (e.g. Austria 0-4, Austria 5-14, ... , Austria 85+)
+- Vaccinations are distributed according to age (oldest people first)
+- Then for each individual sub population the analysis is the same as before
+
+
+### Note regarding the estimated age distribution of COVID deaths
 From a few samples I took, this seemed to understate the concentration of deaths on older people.
 This seems to a peculiarity, others have found as well, e.g. [The Economist writes](https://www.economist.com/graphic-detail/2020/06/24/when-covid-19-deaths-are-analysed-by-age-america-is-an-outlier) 
 
@@ -113,11 +124,20 @@ This seems to a peculiarity, others have found as well, e.g. [The Economist writ
 >
 > There, people in their 80s account for less than half of all covid-19 deaths; people in their 40s, 50s and 60s, meanwhile, account for a significantly larger share of those who die. The median covid-19 sufferer in America is a 48-year-old; in Italy it is a 63-year-old.
 
-The result from this is that for countries where older people tend to die more from COVID compared to the US, my estimates tend to underestimate the effectiveness of all vaccination strategies (as long as they are prioritized in the right order). 
+The result from this is that for countries where older people tend to die more from COVID compared to the US, my estimates tend to underestimate the effectiveness of all vaccination strategies (as long as the vaccinees are prioritized in the right order). 
 
 For the analysis done here this means:
 
 - The difference between "no vaccine" and 2 doses is underestimated
 - The difference between "2 doses" and 1 dose is underestimated
 
-This is the case because results from vaccination efforts are more pronounced, if the actually-at-risk-of-dying population is smaller (because each vaccination has a larger impact on the factor `(1-i2) * (1-i1)` from above).
+This is the case because results from vaccination efforts are more pronounced, if the actually-at-risk-of-dying population is smaller (because each vaccination has a larger impact on the factor `(1-i2) * (1-i1)` in formula (3) above).
+
+### Note regarding simplified distribution
+
+In most countries, vaccines are not distributed according to age only. Several other factors (health conditions, occupation, politics) also play a role.
+
+From the sources I am familiar with, my method will likely overestimate the impact (on lives lost) of the vaccination strategy for the following reasons:
+- Many countries have inefficient distribution mechanisms, e.g. administrative staff of hospitals or husbands of pharmacists are given a vaccine before actually at risk people (non-administrative staff of hospitals with patient contact, old people) get their shot
+- Even if the distribution prioritization of some country is optimal, most of them take multiple factors into account (risk of serious illness, risk of infection, risk of further spread).
+  As my model is built on the assumption that the risk of infection & spread (baked into `r`) is constant or independent of the vaccination strategy, it awards no points for things such as "reduced spread".
