@@ -7,15 +7,8 @@ import pandas as pd
 import numpy as np
 
 
-SOURCE_VACCINATIONS = r"https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/vaccinations/vaccinations.csv"
-SOURCE_DEATHS = r"https://covid.ourworldindata.org/data/owid-covid-data.csv"
-DEATH_DISTRIBUTION = Path(r"./data/death_count_by_age.csv")
-# Population worldwide - age brackets
-POPULATION_DATA = Path(r"./data/owid-population.csv")
+OUT_FOLDER = Path("writeup")
 
-DATA = {
-    "population": r"https://raw.githubusercontent.com/owid/owid-datasets/master/datasets/Population%20by%20age%20group%20to%202100%20(based%20on%20UNWPP%2C%202017%20medium%20scenario)/Population%20by%20age%20group%20to%202100%20(based%20on%20UNWPP%2C%202017%20medium%20scenario).csv",
-}
 
 from enum import Enum
 
@@ -53,8 +46,11 @@ def write_to_file(file, name, value):
     file.write_text(repl)
 
 
-def write_img_to_file(file, name, path, caption=""):
-    img_tag = f"![{caption}]({path})"
+def write_img_to_file(file, name, path: Path, caption=""):
+    path = path.relative_to(OUT_FOLDER)
+    x = str(path).replace("\\", "/")
+    print(x)
+    img_tag = f"![{caption}]({x})"
     write_to_file(file, name, img_tag)
 
 
@@ -76,7 +72,7 @@ def get_data_with_cache(name):
         print("Source must be either string or Path")
 
 
-def get_vaccination_data(extend_by_days=0, per_million = True):
+def get_vaccination_data(extend_by_days=0, per_million=True):
     """Load data from CSV and prepare it for use
 
     Args:
@@ -84,7 +80,9 @@ def get_vaccination_data(extend_by_days=0, per_million = True):
     """
     df_raw = get_data_with_cache(Sources.Vaccinations)
     df_raw["date"] = pd.to_datetime(df_raw["date"])
-    vac_pp_col = "daily_vaccinations_per_million" if per_million else "daily_vaccinations"
+    vac_pp_col = (
+        "daily_vaccinations_per_million" if per_million else "daily_vaccinations"
+    )
     df = df_raw.pivot(index="date", columns="location", values=vac_pp_col)
     df = df.fillna(0)
     # Add additional rows on bottom
@@ -272,7 +270,6 @@ for country in deaths.columns:
     if i > 10:
         break
 # %%
-
 
 
 def get_risk_by_age():

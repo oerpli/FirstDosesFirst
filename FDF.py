@@ -2,20 +2,26 @@
 from collections import defaultdict, deque
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
+
+sns.set_theme()
 
 from utility import (
-    get_data_with_cache,
     Sources,
     get_age_data,
+    get_data_with_cache,
     get_death_data,
     get_death_distr_by_age_us,
     get_vaccination_data,
+    write_img_to_file,
     write_to_file,
+    write_img_to_file,
+    OUT_FOLDER,
 )
 
-OUT_FOLDER = Path("writeup")
 ANALYSIS_NOTES = OUT_FOLDER / "analysis.md"
 
 
@@ -51,57 +57,56 @@ class VaccineEfficacy:
     def __init__(self) -> None:
         self.days_between_shots = 21
         base_immunity = 0
-        x = self.days_between_shots
-        eff_after_fst_x = 0.75
-        y = 35  # 5 weeks
-        eff_after_fst_y = 0.85
-        z = 14  # 2 weeks
-        eff_after_snd_z = 0.95
-        total = x + y + z
         first_dose = [
             (0, base_immunity),
-            (7, base_immunity + 0.005), # very very small gain in first week after shot
-            (x, eff_after_fst_x),
+            (7, base_immunity + 0.005),  # very very small gain in first week after shot
+            (self.days_between_shots, 0.75),
         ]
 
         # In either case, vacc starts with 1st dose and divergence happens after ~3 weeks
-        one_dose = [*first_dose, (x + y, eff_after_fst_y)]
-        two_dose = [*first_dose, (x + z, eff_after_snd_z)]
 
-        days = pd.DataFrame({"days": list(range(total))}).set_index("days")
-        self.eff_1d = pd.DataFrame(one_dose, columns=["days", "one_dose"]).set_index("days")
-        self.eff_2d = pd.DataFrame(two_dose, columns=["days", "two_dose"]).set_index("days")
+        # TODO: Find data from UK regarding this number
+        one_dose = first_dose + [(self.days_between_shots + 35, 0.85)]
+        # From biontech study
+        two_dose = first_dose + [(self.days_between_shots + 14, 0.95)]
 
+        max_days = max([d for d, _ in one_dose] + [d for d, _ in two_dose])
+        days = pd.DataFrame({"days": range(max_days + 1)}).set_index("days")
+        eff_1d = pd.DataFrame(one_dose, columns=["days", D1]).set_index("days")
+        eff_2d = pd.DataFrame(two_dose, columns=["days", D2]).set_index("days")
         # create df from interpolation of data points
-        self.efficacy = days.join(self.eff_1d).join(self.eff_2d).sort_index().interpolate(axis=0)
-    
+        tmp = days.join(eff_1d).join(eff_2d)
+        self.efficacy = tmp.sort_index().interpolate(axis=0)
+
     def print_table(self):
         tmp = (self.efficacy.iloc[:50:3] * 100).astype(int)
+        tmp.columns = [x + " (%)" for x in tmp.columns]
         write_to_file(ANALYSIS_NOTES, "EfficacyTable", tmp.to_markdown())
+        tmp.plot()
+        imgPath = OUT_FOLDER / "img" / "Efficacy.png"
+        plt.savefig(imgPath)
+        caption = "Estimated efficacy after n days"
+        write_img_to_file(ANALYSIS_NOTES, "EfficacyFigure", imgPath, caption)
 
-    def get_eff(self, doses, days):
-        x = self.efficacy.one_dose if doses == 1 else self.efficacy.two_dose
-        if days > len(self.efficacy) -1:
-            return x.max()
+    def __get_eff(self, doses, days):
+        d = [D0, D1, D2][doses]
+        x = self.efficacy[d]
+        if days > len(self.efficacy) - 1:
+            return x.iloc[-1]
         else:
             return x[days]
-    
-    def one_dose(self, x):
-        return self.get_eff(1,x)
-    
-    def two_dose(self,x ):
-        return self.get_eff(2,x)
 
+    def one_dose(self, x):
+        return self.__get_eff(1, x)
+
+    def two_dose(self, x):
+        return self.__get_eff(2, x)
 
 
 VACC = VaccineEfficacy()
+VACC.print_table()
 
 # %% Calculate immunity from two regimes
-
-TOTAL_VAC = defaultdict(list)
-TOTAL_JAB = defaultdict(list)
-
-
 def calc_immunity_1d(df):
     """Input is DF with #vacc per mill/day (one column per country)
     Iterates over all rows, calculates the added immunity of each row to
@@ -118,21 +123,24 @@ def calc_immunity_1d(df):
             new_vac = row[country]
             days_from_jab = [max(0, x - i) for x in range(num_days)]
             result[country] += [x * new_vac for x in map(VACC.one_dose, days_from_jab)]
-            TOTAL_VAC[(country, D1)].append(new_vac)
-            TOTAL_JAB[(country, D1)].append(new_vac)
     result /= 1e6
     return result
+
 
 #%%
 vacc = get_vaccination_data(per_million=False)
 age = get_age_data()
+
+
 def calc_immunity_1d_age(vacc, age):
     pass
-calc_immunity_1d_age(vacc,age)
 
+
+calc_immunity_1d_age(vacc, age)
 
 
 #%%
+
 
 def calc_immunity_2d(df):
     """Does the same as `calc_immunity_1d` for two doses.
@@ -163,12 +171,12 @@ def calc_immunity_2d(df):
             else:
                 new_vac_on_day = total_vacs_of_day - need_2nd
             backlog.append(new_vac_on_day)  # add new one
-            days_from_jab = [max(0, x - i) for x in range(num_days)]
+            days_since = [max(0, x - i) for x in range(num_days)]
             result[country] += [
-                x * new_vac_on_day for x in map(VACC.two_dose, days_from_jab)
+                e * new_vac_on_day for e in map(VACC.two_dose, days_since)
             ]
-            TOTAL_VAC[(country, D2)].append(new_vac_on_day)
-            TOTAL_JAB[(country, D2)].append(total_vacs_of_day)
+            # TOTAL_VAC[(country, D2)].append(new_vac_on_day)
+            # TOTAL_JAB[(country, D2)].append(total_vacs_of_day)
     result /= 1e6
     return result
 
@@ -179,13 +187,6 @@ dds = dds.ffill()
 
 imm1 = calc_immunity_1d(dvs)
 imm2 = calc_immunity_2d(dvs)
-
-df_V = pd.DataFrame(TOTAL_VAC)
-df_V.index = imm1.index
-df_V.columns = pd.MultiIndex.from_tuples(df_V.columns)
-df_J = pd.DataFrame(TOTAL_JAB)
-df_J.index = imm1.index
-df_J.columns = pd.MultiIndex.from_tuples(df_J.columns)
 
 #%%
 
@@ -246,3 +247,4 @@ for (x, y) in [(D2, D0), (D1, D0), (D1, D2)]:
 
 write_to_file(ANALYSIS_NOTES, "SimpleAnalysis", current_total_deaths.to_markdown())
 
+# %%
