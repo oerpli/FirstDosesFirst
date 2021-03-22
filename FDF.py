@@ -15,6 +15,7 @@ from utility import (
     get_age_data,
     get_data_with_cache,
     get_death_data,
+    get_death_data_by_age,
     get_death_distr_by_age_us,
     get_vaccination_data,
     write_img_to_file,
@@ -364,7 +365,13 @@ def calc_immunity_2d_age():
     return result
 
 
-def guesstimate_excess_deaths(imm1, imm2, deaths: pd.DataFrame, method):
+if False:
+    if __name__ == "__main__":
+        imm1d_age = calc_immunity_1d_age()
+        imm2d_age = calc_immunity_2d_age()
+
+
+def guesstimate_excess_deaths_age(imm1, imm2):
     """Takes two estimated immunities and the resulting death count
     and scales death count
 
@@ -372,30 +379,35 @@ def guesstimate_excess_deaths(imm1, imm2, deaths: pd.DataFrame, method):
         immunity ([type]): [description]
         deaths ([type]): [description]
     """
-    start = imm1.index.min()
+    deaths = get_death_data_by_age().loc[imm1.index]
     imm = [None, imm1, imm2]  # None to have 1D in [1] and 2D in [2]
 
-    countries = deaths.columns
+    countries = set(deaths.columns) & set(imm1.columns)
     scaled_deaths = dict()
     for country in countries:
+        if country[0] != "Austria":
+            continue
+        print(country)
         f1 = 1
         f2 = 2
-        scaled_deaths[(country, D0)] = (
-            (deaths[country] / (1 - imm[f2][country])).fillna(0).astype(int)
-        )
-        scaled_deaths[(country, D1)] = (
-            (deaths[country] / (1 - imm[f2][country]) * (1 - imm[f1][country]))
-            .fillna(0)
-            .astype(int)
-        )
-        scaled_deaths[(country, D2)] = deaths[country].fillna(0).astype(int)
+        d = deaths[country]
+        i1 = imm[f1][country]
+        i2 = imm[f2][country]
+        display(d)
+        display(i1)
+        display(i2)
+        scaled_deaths[(*country, D0)] = (d / (1 - i2)).fillna(0).astype(int)
+        scaled_deaths[(*country, D1)] = (d / (1 - i2) * (1 - i1)).fillna(0).astype(int)
+        scaled_deaths[(*country, D2)] = d.fillna(0).astype(int)
 
     df = pd.DataFrame(scaled_deaths)
     df.columns = pd.MultiIndex.from_tuples(df.columns)
-    # return pd.DataFrame(scaled_deaths).join(deaths, rsuffix="_orig")
     return df
 
 
-if __name__ == "__main__":
-    imm1d_age = calc_immunity_1d_age()
-    imm2d_age = calc_immunity_2d_age()
+ed_age = guesstimate_excess_deaths_age(imm1d_age, imm2d_age)
+#%%
+d_total = ed_age.sum(axis=1, level=[0, 2]).cumsum()
+d_total[at]
+
+# %%
