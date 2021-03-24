@@ -18,6 +18,7 @@ class Sources(Enum):
     Deaths = 2
     DeathsByAge = 3
     Demographics = 4
+    VaccAt = 5
 
 
 DATA = {
@@ -29,6 +30,7 @@ DATA = {
     Sources.DeathsByAge: Path(r"./data/death_count_by_age.csv"),
     # OWID, based on UN data
     Sources.Demographics: Path(r"./data/owid-population.csv"),
+    Sources.VaccAt: r"https://info.gesundheitsministerium.at/data/timeline-eimpfpass.csv",
 }
 
 
@@ -56,17 +58,17 @@ def write_img_to_file(file, name, path: Path, alt_text="", caption=""):
 
 
 # %%
-def get_data_with_cache(name) -> pd.DataFrame:
+def get_data_with_cache(name, sep=None) -> pd.DataFrame:
     source = DATA[name]
     if isinstance(source, Path):
-        return pd.read_csv(source)
+        return pd.read_csv(source, sep=sep)
     elif isinstance(source, str):
         today = datetime.now().date().strftime("%Y-%m-%d")
         path = Path(f"./cache/{name}_{today}.pqt")
         if path.exists():
             df_raw = pd.read_parquet(path)
         else:
-            df_raw = pd.read_csv(source)
+            df_raw = pd.read_csv(source, sep=sep)
             df_raw.to_parquet(path, compression="gzip")
         return df_raw
     else:
@@ -272,3 +274,13 @@ def get_risk_by_age():
         (75, 84): 2800,  # G
         (85, 99): 7900,  # H
     }
+
+
+#%%
+clean_special_chars  = lambda x : x.replace("\ufeff", "")
+df = get_data_with_cache(Sources.VaccAt)
+df.columns = map(clean_special_chars,df.columns)
+#%%
+df["Datum"] = pd.to_datetime(df["Datum"])
+
+# %%
