@@ -9,6 +9,10 @@ import numpy as np
 
 OUT_FOLDER = Path("writeup")
 
+# %% Some shorthands
+D0 = "0D"
+D1 = "1D"
+D2 = "2D"
 
 from enum import Enum
 
@@ -32,6 +36,12 @@ DATA = {
     Sources.Demographics: Path(r"./data/owid-population.csv"),
     Sources.VaccAt: r"https://info.gesundheitsministerium.at/data/timeline-eimpfpass.csv",
 }
+
+
+
+def fix_multilevel(df: pd.DataFrame) -> pd.DataFrame:
+    df.columns = pd.MultiIndex.from_tuples(df.columns)
+    return df
 
 
 def write_to_file(file, name, value):
@@ -277,10 +287,103 @@ def get_risk_by_age():
 
 
 #%%
-clean_special_chars  = lambda x : x.replace("\ufeff", "")
-df = get_data_with_cache(Sources.VaccAt)
-df.columns = map(clean_special_chars,df.columns)
-#%%
-df["Datum"] = pd.to_datetime(df["Datum"])
+def get_eimpfpass_data(filter_region=None):
+    df = get_data_with_cache(Sources.VaccAt)
+
+    # Remove BOM from first column
+    clean_special_chars = lambda x: x.replace("\ufeff", "")
+    df.columns = map(clean_special_chars, df.columns)
+
+    # Translate columns
+    translate = {
+        "Datum": "Date",
+        "Bevölkerung": "Population",
+        "BundeslandID": "StateId",
+        "EingetrageneImpfungen": "Vacc",
+        # "EingetrageneImpfungenAstraZeneca_1": "",
+        # "EingetrageneImpfungenAstraZeneca_2": "",
+        # "EingetrageneImpfungenBioNTechPfizer_1": "",
+        # "EingetrageneImpfungenBioNTechPfizer_2": "",
+        # "EingetrageneImpfungenModerna_1": "",
+        # "EingetrageneImpfungenModerna_2": "",
+        "EingetrageneImpfungenPro100": "VaccPer100",
+        "Name": "Region",
+        "Teilgeimpfte": "Vacc_1",
+        "TeilgeimpftePro100": "Vacc_2",
+        "Vollimmunisierte": "Imm",
+        "VollimmunisiertePro100": "ImmPer100",
+    }
+    df = df.rename(translate, axis=1)
+    df["Date"] = pd.to_datetime(df["Date"])
+
+    relevant = [
+        "Date",
+        "Population",
+        "Vacc",
+        "VaccPer100",
+        "Vacc_1",
+        "Vacc_2",
+        "Imm",
+        "ImmPer100",
+    ]
+
+    df_full = df.copy()
+    regions = dict()
+    for region in df.Region.unique():
+        df = df_full[df_full.Region == region]
+        groups = {
+            D1: {
+                "00-24": ["Gruppe<24_M_1", "Gruppe<24_W_1", "Gruppe<24_D_1"],
+                "25-34": ["Gruppe_25-34_M_1", "Gruppe_25-34_W_1", "Gruppe_25-34_D_1"],
+                "35-44": ["Gruppe_35-44_M_1", "Gruppe_35-44_W_1", "Gruppe_35-44_D_1"],
+                "45-54": ["Gruppe_45-54_M_1", "Gruppe_45-54_W_1", "Gruppe_45-54_D_1"],
+                "55-64": ["Gruppe_55-64_M_1", "Gruppe_55-64_W_1", "Gruppe_55-64_D_1"],
+                "65-74": ["Gruppe_65-74_M_1", "Gruppe_65-74_W_1", "Gruppe_65-74_D_1"],
+                "75-84": ["Gruppe_75-84_M_1", "Gruppe_75-84_W_1", "Gruppe_75-84_D_1"],
+                "85-99": ["Gruppe_>84_M_1", "Gruppe_>84_W_1", "Gruppe_>84_D_1"],
+            },
+            D2: {
+                "00-24": ["Gruppe<24_M_1", "Gruppe<24_W_1", "Gruppe<24_D_1"],
+                "25-34": ["Gruppe_25-34_M_1", "Gruppe_25-34_W_1", "Gruppe_25-34_D_1"],
+                "35-44": ["Gruppe_35-44_M_1", "Gruppe_35-44_W_1", "Gruppe_35-44_D_1"],
+                "45-54": ["Gruppe_45-54_M_1", "Gruppe_45-54_W_1", "Gruppe_45-54_D_1"],
+                "55-64": ["Gruppe_55-64_M_1", "Gruppe_55-64_W_1", "Gruppe_55-64_D_1"],
+                "65-74": ["Gruppe_65-74_M_1", "Gruppe_65-74_W_1", "Gruppe_65-74_D_1"],
+                "75-84": ["Gruppe_75-84_M_1", "Gruppe_75-84_W_1", "Gruppe_75-84_D_1"],
+                "85-99": ["Gruppe_>84_M_2", "Gruppe_>84_W_2", "Gruppe_>84_D_2"],
+            },
+        }
+        dfn = df[relevant].copy()
+        # necessary in both
+        df = df.set_index(["Date"]).sort_index()
+        dfn = dfn.set_index(["Date"]).sort_index()
+        for d, g in groups.items():
+            for k, v in g.items():
+                # Sum over m/f/x, derive to get daily numbers, fill up empty with 0
+                dfn[(d, k)] = df[v].sum(axis=1).diff().fillna(0).astype(int)
+
+        dfn.columns = [("Meta", x) if isinstance(x, str) else x for x in dfn.columns]
+        # throw away first row as derivative doesn't really work when multiple regions exist
+        regions[region] = dfn
+    for k, v in regions.items():
+        v.columns = [(k, *x) for x in v.columns]
+    dft = pd.concat(regions.values(), axis=1)
+    dft.columns = pd.MultiIndex.from_tuples(dft.columns)
+    selection = dft[
+        [
+            "Österreich",
+            "Burgenland",
+            # "KeineZuordnung",
+            "Kärnten",
+            "Niederösterreich",
+            "Oberösterreich",
+            "Salzburg",
+            "Steiermark",
+            "Tirol",
+            "Vorarlberg",
+            "Wien",
+        ]
+    ].copy()
+    return fix_multilevel(selection)
 
 # %%

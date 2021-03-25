@@ -21,16 +21,13 @@ from utility import (
     write_img_to_file,
     write_to_file,
     write_img_to_file,
-    OUT_FOLDER,
+    OUT_FOLDER,D1,D2,D0
 )
 
 ANALYSIS_NOTES = OUT_FOLDER / "analysis.md"
 
 
-# %% Some shorthands
-D0 = "0D"
-D1 = "1D"
-D2 = "2D"
+
 
 current_dosing = {
     "Austria": 2,

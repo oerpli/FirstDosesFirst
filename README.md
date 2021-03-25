@@ -80,7 +80,10 @@ The discussion at [Pfizer/Moderna/...] probably went something like this:
 > 
 > CEO: 2 doses, 100µg each, 3 weeks apart it is! 
 
-While I assume they had some 
+While I am not entirely sure that it is how it went, various studies have been released that show:
+- Vastly smaller doses resulting in comparable immune reaction [SOURCES!!!]
+- Improved long term immunity with longer interval between two doses.
+- Pretty good immunity from one dose only (at least for mRNA vaccines)
 Illiterate bureaucrats treat 
 
 [^1]: https://www.health.harvard.edu/diseases-and-conditions/if-youve-been-exposed-to-the-coronavirus
