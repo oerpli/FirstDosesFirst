@@ -37,11 +37,11 @@ This is measured as follows:
 
 As the incubation period of COVID is approximately four to five days[^1], people that develop symptoms in the first week were (likely) either infected shortly before or after they were given the vaccine.
 
-![Cases n days after 1st dose](img/days_after_d1.png)
+![Cases n days after 1st dose](writeup/img/days_after_d1.png)
 
 If the first week after the 1st dose is cropped out of the picture, one gets the following result:
 
-![Cases n days after 7 days after 1st dose](img/dad1_edit.png)
+![Cases n days after 7 days after 1st dose](writeup/img/dad1_edit.png)
 
 As approximately 50% of the cases that contribute to the 52% efficacy occurred in the first week after the 1st dose, the resulting 52% severely underestimates how effective the first dose actually is.
 
@@ -54,37 +54,6 @@ There were several goals & constraints when developing vaccinations for COVID:
 - Get above some threshold for efficacy. I vaguely remember that back in the summer of 2020 around 60% would have been enough.
 - Trials should be done as fast as possible.
 - All red tape put up in dozens of years by regulations has to be respected.
-
-The discussion at [Pfizer/Moderna/...] probably went something like this:
-
-> A: A new virus seems to go around, could be a big thing. Let's create some vaccine
-> 
-> B: Okay. I will try out this new mRNA thing
-> 
-> `[2 days later]`[^2]
-> 
-> B: I have something promising. Let's do some tests!
-> 
-> A: Okay. How much should we give participants? 
-> 
-> C: No idea. One syringe, approx. one third full, like on my favorite syringe clip art that I use for my PowerPoint slides
-> ![Image of syringe](img/syringe.png)
-> 
-> A: How much is that? 
-> 
-> B: (grabbing a random syringe from a box lying around) This one has 300µm, so let's go with 100µm
-> 
-> A: And let's do two doses, it's usually better than one. But how much apart? 1 week? 1 month? 1 year? 
-> 
-> C: Let's go with something short, else our trials will take forever.
-> 
-> CEO: 2 doses, 100µg each, 3 weeks apart it is! 
-
-While I am not entirely sure that it is how it went, various studies have been released that show:
-- Vastly smaller doses resulting in comparable immune reaction [SOURCES!!!]
-- Improved long term immunity with longer interval between two doses.
-- Pretty good immunity from one dose only (at least for mRNA vaccines)
-Illiterate bureaucrats treat 
 
 [^1]: https://www.health.harvard.edu/diseases-and-conditions/if-youve-been-exposed-to-the-coronavirus
 

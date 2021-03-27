@@ -21,12 +21,13 @@ from utility import (
     write_img_to_file,
     write_to_file,
     write_img_to_file,
-    OUT_FOLDER,D1,D2,D0
+    OUT_FOLDER,
+    D1,
+    D2,
+    D0,
 )
 
 ANALYSIS_NOTES = OUT_FOLDER / "analysis.md"
-
-
 
 
 current_dosing = {
@@ -54,22 +55,24 @@ deaths_by_age = get_death_distr_by_age_us()
 # %% Data for Immunity stemming from Vaccination:
 # TODO: This should be made somehow less shitty s.t it is easy to plop in a replacement
 # immunity-curve to see results
+
+
 class VaccineEfficacy:
     def __init__(self) -> None:
         self.days_between_shots = 21
         base_immunity = 0
         first_dose = [
             (0, base_immunity),
-            (7, base_immunity + 0.005),  # very very small gain in first week after shot
+            (7, base_immunity + 0.005),  # negligible gain in first week after shot
             (self.days_between_shots, 0.75),
         ]
 
         # In either case, vacc starts with 1st dose and divergence happens after ~3 weeks
 
         # TODO: Find data from UK regarding this number
-        one_dose = first_dose + [(self.days_between_shots + 35, 0.85)]
+        one_dose = first_dose + [(self.days_between_shots + 10, 0.75)]
         # From biontech study
-        two_dose = first_dose + [(self.days_between_shots + 14, 0.95)]
+        two_dose = first_dose + [(self.days_between_shots + 14, 0.90)]
 
         max_days = max([d for d, _ in one_dose] + [d for d, _ in two_dose])
         days = pd.DataFrame({"days": range(max_days + 1)}).set_index("days")
@@ -362,7 +365,7 @@ def calc_immunity_2d_age():
     return result
 
 
-if False:
+if True:
     if __name__ == "__main__":
         imm1d_age = calc_immunity_1d_age()
         imm2d_age = calc_immunity_2d_age()

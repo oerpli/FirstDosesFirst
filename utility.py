@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 
 
-OUT_FOLDER = Path("writeup")
+OUT_FOLDER = Path(".")
 
 # %% Some shorthands
 D0 = "0D"
@@ -38,7 +38,6 @@ DATA = {
 }
 
 
-
 def fix_multilevel(df: pd.DataFrame) -> pd.DataFrame:
     df.columns = pd.MultiIndex.from_tuples(df.columns)
     return df
@@ -58,27 +57,28 @@ def write_to_file(file, name, value):
     file.write_text(repl)
 
 
-def write_img_to_file(file, name, path: Path, alt_text="", caption=""):
+def write_img_to_file(file, name, path: Path, alt_text=None, caption=None):
     path = path.relative_to(OUT_FOLDER)
     x = str(path).replace("\\", "/")
     # print(x)
-    c = f"{caption}\n".strip()  # empty if caption is empty
+    c = f"{caption}\n" if caption else ""
+    alt_text = alt_text or ""
     img_tag = f"{c}![{alt_text}]({x})"
     write_to_file(file, name, img_tag)
 
 
 # %%
-def get_data_with_cache(name, sep=None) -> pd.DataFrame:
+def get_data_with_cache(name, **kwargs) -> pd.DataFrame:
     source = DATA[name]
     if isinstance(source, Path):
-        return pd.read_csv(source, sep=sep)
+        return pd.read_csv(source, **kwargs)
     elif isinstance(source, str):
         today = datetime.now().date().strftime("%Y-%m-%d")
         path = Path(f"./cache/{name}_{today}.pqt")
         if path.exists():
             df_raw = pd.read_parquet(path)
         else:
-            df_raw = pd.read_csv(source, sep=sep)
+            df_raw = pd.read_csv(source, **kwargs)
             df_raw.to_parquet(path, compression="gzip")
         return df_raw
     else:
@@ -287,12 +287,12 @@ def get_risk_by_age():
 
 
 #%%
-def get_eimpfpass_data(filter_region=None):
-    df = get_data_with_cache(Sources.VaccAt)
+def get_vaccinations_at(filter_region=None):
+    clean_special_chars = lambda x: x.replace("\ufeff", "")
+    df = get_data_with_cache(Sources.VaccAt, sep=';', parse_dates =True)
+    df.columns = map(clean_special_chars, df.columns)
 
     # Remove BOM from first column
-    clean_special_chars = lambda x: x.replace("\ufeff", "")
-    df.columns = map(clean_special_chars, df.columns)
 
     # Translate columns
     translate = {
@@ -309,12 +309,12 @@ def get_eimpfpass_data(filter_region=None):
         "EingetrageneImpfungenPro100": "VaccPer100",
         "Name": "Region",
         "Teilgeimpfte": "Vacc_1",
-        "TeilgeimpftePro100": "Vacc_2",
-        "Vollimmunisierte": "Imm",
-        "VollimmunisiertePro100": "ImmPer100",
+        "Vollimmunisierte": "Vacc_2",
+        "TeilgeimpftePro100": "Vacc_1Per100",
+        "VollimmunisiertePro100": "Vacc_2Per100",
     }
     df = df.rename(translate, axis=1)
-    df["Date"] = pd.to_datetime(df["Date"])
+    df["Date"] = pd.to_datetime(df["Date"].str.slice(0,10))
 
     relevant = [
         "Date",
@@ -323,8 +323,8 @@ def get_eimpfpass_data(filter_region=None):
         "VaccPer100",
         "Vacc_1",
         "Vacc_2",
-        "Imm",
-        "ImmPer100",
+        "Vacc_1Per100",
+        "Vacc_2Per100",
     ]
 
     df_full = df.copy()
@@ -343,13 +343,13 @@ def get_eimpfpass_data(filter_region=None):
                 "85-99": ["Gruppe_>84_M_1", "Gruppe_>84_W_1", "Gruppe_>84_D_1"],
             },
             D2: {
-                "00-24": ["Gruppe<24_M_1", "Gruppe<24_W_1", "Gruppe<24_D_1"],
-                "25-34": ["Gruppe_25-34_M_1", "Gruppe_25-34_W_1", "Gruppe_25-34_D_1"],
-                "35-44": ["Gruppe_35-44_M_1", "Gruppe_35-44_W_1", "Gruppe_35-44_D_1"],
-                "45-54": ["Gruppe_45-54_M_1", "Gruppe_45-54_W_1", "Gruppe_45-54_D_1"],
-                "55-64": ["Gruppe_55-64_M_1", "Gruppe_55-64_W_1", "Gruppe_55-64_D_1"],
-                "65-74": ["Gruppe_65-74_M_1", "Gruppe_65-74_W_1", "Gruppe_65-74_D_1"],
-                "75-84": ["Gruppe_75-84_M_1", "Gruppe_75-84_W_1", "Gruppe_75-84_D_1"],
+                "00-24": ["Gruppe<24_M_2", "Gruppe<24_W_2", "Gruppe<24_D_2"],
+                "25-34": ["Gruppe_25-34_M_2", "Gruppe_25-34_W_2", "Gruppe_25-34_D_2"],
+                "35-44": ["Gruppe_35-44_M_2", "Gruppe_35-44_W_2", "Gruppe_35-44_D_2"],
+                "45-54": ["Gruppe_45-54_M_2", "Gruppe_45-54_W_2", "Gruppe_45-54_D_2"],
+                "55-64": ["Gruppe_55-64_M_2", "Gruppe_55-64_W_2", "Gruppe_55-64_D_2"],
+                "65-74": ["Gruppe_65-74_M_2", "Gruppe_65-74_W_2", "Gruppe_65-74_D_2"],
+                "75-84": ["Gruppe_75-84_M_2", "Gruppe_75-84_W_2", "Gruppe_75-84_D_2"],
                 "85-99": ["Gruppe_>84_M_2", "Gruppe_>84_W_2", "Gruppe_>84_D_2"],
             },
         }
@@ -386,4 +386,27 @@ def get_eimpfpass_data(filter_region=None):
     ].copy()
     return fix_multilevel(selection)
 
+
 # %%
+def get_demographics_at():
+    df = pd.read_excel("data/population-at.xlsx")
+    df.columns = [x.strip() for x in df.columns]
+    print(df.columns)
+    df = df.rename({"Alter": "Age"}, axis=1)
+    df["Age"] = [x.split()[0] for x in df["Age"]]
+    df["Age"] = df["Age"].astype(int)
+    df = df.set_index("Age")
+    age_groups = {
+        "00-24": list(range(00, 24 + 1)),
+        "25-34": list(range(25, 34 + 1)),
+        "35-44": list(range(35, 44 + 1)),
+        "45-54": list(range(45, 54 + 1)),
+        "55-64": list(range(55, 64 + 1)),
+        "65-74": list(range(65, 74 + 1)),
+        "75-84": list(range(75, 84 + 1)),
+        "85-99": list(range(85, 99 + 1)),
+    }
+    new_df = pd.DataFrame(columns=df.columns)
+    for k, v in age_groups.items():
+        new_df.loc[k] = df.loc[v].sum()
+    return new_df
