@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 
 
-OUT_FOLDER = Path(".")
+OUT_FOLDER = Path("fdf_posts")
 
 # %% Some shorthands
 D0 = "0D"

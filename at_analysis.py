@@ -10,8 +10,8 @@ from pathlib import Path
 
 region = "Vorarlberg"
 short = "vlbg"
-vlbg_img = Path("img") / short
-vlbg_report = Path("CaseStudyVlbg.md")
+vlbg_img = OUT_FOLDER / "img" / short
+vlbg_report = OUT_FOLDER / "CaseStudyVlbg.md"
 
 
 def save_fig(ax, name, alt_text=None, caption=None):
@@ -89,10 +89,10 @@ save_table(d1only, "D1OnlyData")
 
 
 #%% Combined table
-d1d2o1 = fix_multilevel(d1data.join(d2data).join(d1only).swaplevel(axis=1)).sort_index(
-    axis=1
-)
-save_table(d1d2o1, "CompleteTable")
+# d1d2o1 = fix_multilevel(d1data.join(d2data).join(d1only).swaplevel(axis=1)).sort_index(
+#     axis=1
+# )
+# save_table(d1d2o1, "CompleteTable")
 #%% df[[D1,D2]].cumsum().plot()
 
 #%% Get Data for Old and Young
