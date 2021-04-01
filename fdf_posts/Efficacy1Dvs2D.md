@@ -14,4 +14,3 @@ Most of them are to be administered in two doses, with several weeks in between.
 | Moderna           |     2 | 4 weeks              |
 | Astra Zeneca      |     2 | 8-12 weeks           |
 
-
