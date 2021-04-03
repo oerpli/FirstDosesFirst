@@ -293,7 +293,8 @@ def get_risk_by_age():
 
 #%%
 def get_vaccinations_de():
-    df = get_data_with_cache(Sources.VaccDe)
+    df = get_data_with_cache(Sources.VaccDe, parse_dates=True)
+    df["Date"] = pd.to_datetime(df["Date"].str.slice(0, 10))
     df = df.set_index("Date",drop=True)
     # De doesn't publish data by age group
     columns = {

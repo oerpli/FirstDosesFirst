@@ -242,10 +242,8 @@ for nice, short in regions.items():
     per_pop_c = imm_w.columns[0::2]
     per_death_c = imm_w.columns[1::2]
 
-
     create_altair_plot_immunity(imm_normal, f"{nice}", f"real_{short}")
     create_altair_plot_immunity(imm_fdf, f"{nice} (FDF)", f"fdf_{short}")
-
 
     create_altair_plot_weighted_immunity(imm_w[per_pop_c], f"{nice}", f"p_{short}")
     create_altair_plot_weighted_immunity(imm_w[per_death_c], f"{nice}", f"d_{short}")
@@ -265,4 +263,17 @@ for nice, short in regions.items():
 
 # %%
 create_altair_plot_vacc(rd[D2].cumsum(), f"{nice} {D2} (FDF)", f"test")
+# %% Test germany
+de = get_vaccinations_de()
+guess_pop_de = pt["Österreich"].loc[0] * 10
+rde = redistribute_doses(de, guess_pop_de, distr_first=True)
+imm_de = get_avg_immunity(rde, guess_pop_de)
+plt = create_altair_plot_immunity(imm_de, "Germany (FDF)", f"fdf_{'de'}")
+display(plt)
+ws = {"Population": guess_pop_de, "Deaths": deaths_at.loc["Deaths"]}
+imm_w = calc_weighted_immunity(imm_de, ws)
+plt = create_altair_plot_weighted_immunity(imm_w, "Germany (FDF)", f"fdf_{'de'}")
+display(plt)
+
+
 # %%
