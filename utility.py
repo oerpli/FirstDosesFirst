@@ -24,6 +24,7 @@ class Sources(Enum):
     Demographics = 4
     VaccAt = 5
     DeathsAtAge = 6
+    VaccDe = 7
 
 
 DATA = {
@@ -36,7 +37,10 @@ DATA = {
     # OWID, based on UN data
     Sources.Demographics: Path(r"./data/owid-population.csv"),
     Sources.VaccAt: r"https://info.gesundheitsministerium.at/data/timeline-eimpfpass.csv",
-    Sources.DeathsAtAge: Path(r"./data/deaths_by_age_at.csv") # https://www.ages.at/themen/krankheitserreger/coronavirus/
+    # https://www.ages.at/themen/krankheitserreger/coronavirus/
+    Sources.DeathsAtAge: Path(r"./data/deaths_by_age_at.csv"),
+    # https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/Daten/Impfquoten-Tab.html
+    Sources.VaccDe: Path(r"./data/de_data.csv"),
 }
 
 
@@ -287,11 +291,29 @@ def get_risk_by_age():
         (85, 99): 7900,  # H
     }
 
-
+#%%
+def get_vaccinations_de():
+    df = get_data_with_cache(Sources.VaccDe)
+    df = df.set_index("Date",drop=True)
+    # De doesn't publish data by age group
+    columns = {
+        D1: ["25-34", "35-44", "45-54", "55-64", "65-74", "75-84", "85-99"],
+        D2: ["25-34", "35-44", "45-54", "55-64", "65-74", "75-84", "85-99"],
+    }
+    cs = []
+    for k, vs in columns.items():
+        for v in vs:
+            cs.append((k, v))
+            df[(k, v)] = 0
+        df[(k, vs[-1])] = df[k]
+    df = fix_multilevel(df[cs])
+    return df[cs]
+get_vaccinations_de()
+#%%
 #%%
 def get_vaccinations_at(filter_region=None):
     clean_special_chars = lambda x: x.replace("\ufeff", "")
-    df = get_data_with_cache(Sources.VaccAt, sep=';', parse_dates =True)
+    df = get_data_with_cache(Sources.VaccAt, sep=";", parse_dates=True)
     df.columns = map(clean_special_chars, df.columns)
 
     # Remove BOM from first column
@@ -316,7 +338,7 @@ def get_vaccinations_at(filter_region=None):
         "VollimmunisiertePro100": "Vacc_2Per100",
     }
     df = df.rename(translate, axis=1)
-    df["Date"] = pd.to_datetime(df["Date"].str.slice(0,10))
+    df["Date"] = pd.to_datetime(df["Date"].str.slice(0, 10))
 
     relevant = [
         "Date",
@@ -388,11 +410,13 @@ def get_vaccinations_at(filter_region=None):
     ].copy()
     return fix_multilevel(selection)
 
+
 #%%
 def get_deaths_by_age_at():
     df = get_data_with_cache(Sources.DeathsAtAge)
     df = df.set_index("AgeGroup").T
-    return df 
+    return df
+
 
 get_deaths_by_age_at()
 
@@ -475,6 +499,7 @@ def redistribute_doses(df, pop, *, distr_first=False, priority=None) -> pd.DataF
         # finished updating row, save to list
         rows.append(row_new)
     return pd.DataFrame(rows, index=df.index)
+
 
 # %%
 def get_demographics_at():
