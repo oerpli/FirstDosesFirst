@@ -10,10 +10,14 @@ from pathlib import Path
 
 PLOT_FOLDER = Path("Y:/GitRepos/oerpli.github.io/fdf")
 
+ALTAIR_WIDTH = 500
+
 region = "Vorarlberg"
 short = "vlbg"
 vlbg_img = OUT_FOLDER / "img" / short
 vlbg_report = OUT_FOLDER / "CaseStudyVlbg.md"
+
+deaths_at = get_deaths_by_age_at()
 
 
 def save_fig(ax, name, alt_text=None, caption=None):
@@ -135,7 +139,7 @@ def create_altair_plot_immunity(imm, title, name):
         value_name="Immunity",
     )
     chart = (
-        alt.Chart(chart_data)
+        alt.Chart(chart_data, width=ALTAIR_WIDTH)
         .mark_line(clip=True)
         .encode(
             x="Date",
@@ -150,7 +154,56 @@ def create_altair_plot_immunity(imm, title, name):
     return chart
 
 
-for k, v in region_names.items():
+#%%
+def create_altair_plot_vacc(vacc, title, name):
+    chart_data = pd.melt(
+        vacc.reset_index(),
+        id_vars="Date",
+        value_vars=vacc.columns,
+        var_name="Age Group",
+        value_name="Vaccinations",
+    )
+    chart = (
+        alt.Chart(chart_data, width=ALTAIR_WIDTH)
+        .mark_line(clip=True)
+        .encode(
+            x="Date",
+            y="Vaccinations",
+            color="Age Group",
+            strokeDash="Age Group",
+        )
+        .properties(title=f"Number of vaccinations: {title}")
+        .interactive()
+    )
+    chart.save(str(PLOT_FOLDER / f"vacc_{name}.json"))
+    return chart
+
+
+#%%
+def calc_weighted_immunity(imm, weights):
+    dfs = []
+    for name, weight in weights.items():
+        imm_w = (imm * weight).sum(axis=1) / weight.sum()
+        df = pd.DataFrame({name: imm_w})
+        dfs.append(df)
+    a, *bs = dfs
+    for b in bs:
+        a = a.join(b)
+    return a
+
+
+weightings = {
+    "Avg": pop,  # calc immunity on average
+    "AvgD": deaths_at.loc["Deaths"],  # weighted by deaths
+}
+
+normal_imm = calc_weighted_immunity(imm_normal, weightings)
+fdf_imm = calc_weighted_immunity(imm_fdf, weightings)
+
+#%%
+regions = region_names  # all regions
+regions = {"Vorarlberg": "test"}  # for debugging
+for k, v in regions.items():
     df = df_full[k]  # get subset of region
     pop = pt[k].loc[0]  # get population of region
     dfv = df[[D1, D2]]  # 1D,2D get vaccination data of region
@@ -160,12 +213,20 @@ for k, v in region_names.items():
 
     imm_normal = get_avg_immunity(dfv, pop)
     imm_fdf = get_avg_immunity(rd, pop)
-    create_altair_plot_immunity(imm_normal, f"{v}", f"real_{v}")
-    create_altair_plot_immunity(imm_fdf, f"{v} (FDF)", f"fdf_{v}")
-    # plot immunity levels:
+    create_altair_plot_immunity(imm_normal, f"{k}", f"real_{v}")
+    create_altair_plot_immunity(imm_fdf, f"{k} (FDF)", f"fdf_{v}")
+    create_altair_plot_vacc((dfv[D1] + dfv[D2]).cumsum(), f"{k} Total", f"real_t_{v}")
+    create_altair_plot_vacc(dfv[D1].cumsum(), f"{k} {D1}", f"real_d1_{v}")
+    create_altair_plot_vacc(dfv[D2].cumsum(), f"{k} {D2}", f"real_d2_{v}")
+    create_altair_plot_vacc(rd[D1].cumsum(), f"{k} {D1} (FDF)", f"fdf_d1_{v}")
+    create_altair_plot_vacc(rd[D2].cumsum(), f"{k} {D2} (FDF)", f"fdf_d2_{v}")
+
+    # plot immunity levels with matplotlib
     ax = imm_normal.plot(title=f"Immunity {k}")
     ax.set_ylim(0, 1)
     ax2 = imm_fdf.plot(title=f"FDF Immunity {k}")
     ax2.set_ylim(0, 1)
 
+# %%
+create_altair_plot_vacc(rd[D2].cumsum(), f"{k} {D2} (FDF)", f"test")
 # %%

@@ -23,6 +23,7 @@ class Sources(Enum):
     DeathsByAge = 3
     Demographics = 4
     VaccAt = 5
+    DeathsAtAge = 6
 
 
 DATA = {
@@ -35,6 +36,7 @@ DATA = {
     # OWID, based on UN data
     Sources.Demographics: Path(r"./data/owid-population.csv"),
     Sources.VaccAt: r"https://info.gesundheitsministerium.at/data/timeline-eimpfpass.csv",
+    Sources.DeathsAtAge: Path(r"./data/deaths_by_age_at.csv") # https://www.ages.at/themen/krankheitserreger/coronavirus/
 }
 
 
@@ -386,6 +388,13 @@ def get_vaccinations_at(filter_region=None):
     ].copy()
     return fix_multilevel(selection)
 
+#%%
+def get_deaths_by_age_at():
+    df = get_data_with_cache(Sources.DeathsAtAge)
+    df = df.set_index("AgeGroup").T
+    return df 
+
+get_deaths_by_age_at()
 
 
 #%% Calculate alternative dose-distribution
