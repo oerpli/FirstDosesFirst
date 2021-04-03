@@ -3,10 +3,12 @@ from utility import *
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+import altair as alt
 
 sns.set_theme()
 from pathlib import Path
 
+PLOT_FOLDER = Path("Y:/GitRepos/oerpli.github.io/fdf")
 
 region = "Vorarlberg"
 short = "vlbg"
@@ -124,29 +126,7 @@ def get_avg_immunity(df, pop):
     return imm_p
 
 
-for k, v in region_names.items():
-    df = df_full[k]  # get subset of region
-    pop = pt[k].loc[0]  # get population of region
-    dfv = df[[D1, D2]]  # 1D,2D get vaccination data of region
-    # Choose one from the following two
-    rd = redistribute_doses(dfv, pop, distr_first=False) # more conservative
-    rd = redistribute_doses(dfv, pop, distr_first=True) # also reassign first doses based on prio
-    
-    imm_normal = get_avg_immunity(dfv, pop)
-    imm_fdf = get_avg_immunity(rd, pop)
-    # plot immunity levels:
-    ax = imm_normal.plot(title=f"Immunity {k}")
-    ax.set_ylim(0,1)
-    ax2 = imm_fdf.plot(title=f"FDF Immunity {k}")
-    ax2.set_ylim(0,1)
-
-
-#%%
-if False:
-    import altair as alt
-
-    # %%
-    # %%
+def create_altair_plot_immunity(imm, title, name):
     chart_data = pd.melt(
         imm.reset_index(),
         id_vars="Date",
@@ -154,7 +134,6 @@ if False:
         var_name="Age Group",
         value_name="Immunity",
     )
-
     chart = (
         alt.Chart(chart_data)
         .mark_line(clip=True)
@@ -164,9 +143,29 @@ if False:
             color="Age Group",
             strokeDash="Age Group",
         )
+        .properties(title=f"Estimated Immunity: {title}")
         .interactive()
     )
-    chart.save("chart.json")
-    # %%
-    chart
-    # %%
+    chart.save(str(PLOT_FOLDER / f"imm_{name}.json"))
+    return chart
+
+
+for k, v in region_names.items():
+    df = df_full[k]  # get subset of region
+    pop = pt[k].loc[0]  # get population of region
+    dfv = df[[D1, D2]]  # 1D,2D get vaccination data of region
+    # Choose one from the following two
+    rd = redistribute_doses(dfv, pop, distr_first=False)  # more conservative
+    # rd = redistribute_doses(dfv, pop, distr_first=True) # also reassign first doses based on prio
+
+    imm_normal = get_avg_immunity(dfv, pop)
+    imm_fdf = get_avg_immunity(rd, pop)
+    create_altair_plot_immunity(imm_normal, f"{v}", f"real_{v}")
+    create_altair_plot_immunity(imm_fdf, f"{v} (FDF)", f"fdf_{v}")
+    # plot immunity levels:
+    ax = imm_normal.plot(title=f"Immunity {k}")
+    ax.set_ylim(0, 1)
+    ax2 = imm_fdf.plot(title=f"FDF Immunity {k}")
+    ax2.set_ylim(0, 1)
+
+# %%
