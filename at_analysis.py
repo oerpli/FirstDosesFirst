@@ -103,12 +103,12 @@ d1d2o1
 
 
 region_names = {
-    "Burgenland": "at-bg",
-    "Kärnten": "at-k",
-    "Niederösterreich": "at-noe",
-    "Oberösterreich": "at-ooe",
-    "Salzburg": "at-sbg",
-    "Steiermark": "at-stmk",
+    # "Burgenland": "at-bg",
+    # "Kärnten": "at-k",
+    # "Niederösterreich": "at-noe",
+    # "Oberösterreich": "at-ooe",
+    # "Salzburg": "at-sbg",
+    # "Steiermark": "at-stmk",
     "Tirol": "at-t",
     "Vorarlberg": "at-vlbg",
     "Wien": "at-vienna",
@@ -180,7 +180,32 @@ def create_altair_plot_vacc(vacc, title, name):
 
 
 #%%
-def calc_weighted_immunity(imm, weights):
+def create_altair_plot_weighted_immunity(imm_w, title, name):
+    chart_data = pd.melt(
+        imm_w.reset_index(),
+        id_vars="Date",
+        value_vars=imm_w.columns,
+        var_name="Weighted by",
+        value_name="Immunity",
+    )
+    chart = (
+        alt.Chart(chart_data, width=ALTAIR_WIDTH)
+        .mark_line(clip=True)
+        .encode(
+            x="Date",
+            y="Immunity",
+            color="Weighted by",
+            strokeDash="Weighted by",
+        )
+        .properties(title=f"Weighted average immunity: {title}")
+        .interactive()
+    )
+    chart.save(str(PLOT_FOLDER / f"imm_w{name}.json"))
+    return chart
+
+
+#%%
+def calc_weighted_immunity(imm, weights) -> pd.DataFrame:
     dfs = []
     for name, weight in weights.items():
         imm_w = (imm * weight).sum(axis=1) / weight.sum()
@@ -192,20 +217,12 @@ def calc_weighted_immunity(imm, weights):
     return a
 
 
-weightings = {
-    "Avg": pop,  # calc immunity on average
-    "AvgD": deaths_at.loc["Deaths"],  # weighted by deaths
-}
-
-normal_imm = calc_weighted_immunity(imm_normal, weightings)
-fdf_imm = calc_weighted_immunity(imm_fdf, weightings)
-
 #%%
 regions = region_names  # all regions
-regions = {"Vorarlberg": "test"}  # for debugging
-for k, v in regions.items():
-    df = df_full[k]  # get subset of region
-    pop = pt[k].loc[0]  # get population of region
+# regions = {"Vorarlberg": "at-vlbg"}  # for debugging
+for nice, short in regions.items():
+    df = df_full[nice]  # get subset of region
+    pop = pt[nice].loc[0]  # get population of region
     dfv = df[[D1, D2]]  # 1D,2D get vaccination data of region
     # Choose one from the following two
     rd = redistribute_doses(dfv, pop, distr_first=False)  # more conservative
@@ -213,20 +230,39 @@ for k, v in regions.items():
 
     imm_normal = get_avg_immunity(dfv, pop)
     imm_fdf = get_avg_immunity(rd, pop)
-    create_altair_plot_immunity(imm_normal, f"{k}", f"real_{v}")
-    create_altair_plot_immunity(imm_fdf, f"{k} (FDF)", f"fdf_{v}")
-    create_altair_plot_vacc((dfv[D1] + dfv[D2]).cumsum(), f"{k} Total", f"real_t_{v}")
-    create_altair_plot_vacc(dfv[D1].cumsum(), f"{k} {D1}", f"real_d1_{v}")
-    create_altair_plot_vacc(dfv[D2].cumsum(), f"{k} {D2}", f"real_d2_{v}")
-    create_altair_plot_vacc(rd[D1].cumsum(), f"{k} {D1} (FDF)", f"fdf_d1_{v}")
-    create_altair_plot_vacc(rd[D2].cumsum(), f"{k} {D2} (FDF)", f"fdf_d2_{v}")
+
+    weightings = {
+        "Population": pop,  # calc immunity on average
+        "Death distribution": deaths_at.loc["Deaths"],  # weighted by deaths
+    }
+
+    imm_w_n = calc_weighted_immunity(imm_normal, weightings)
+    imm_w_fdf = calc_weighted_immunity(imm_fdf, weightings)
+    imm_w = imm_w_n.join(imm_w_fdf, rsuffix=" (FDF)", lsuffix=" (Normal)")
+    per_pop_c = imm_w.columns[0::2]
+    per_death_c = imm_w.columns[1::2]
+
+
+    create_altair_plot_immunity(imm_normal, f"{nice}", f"real_{short}")
+    create_altair_plot_immunity(imm_fdf, f"{nice} (FDF)", f"fdf_{short}")
+
+
+    create_altair_plot_weighted_immunity(imm_w[per_pop_c], f"{nice}", f"p_{short}")
+    create_altair_plot_weighted_immunity(imm_w[per_death_c], f"{nice}", f"d_{short}")
+
+    total = dfv[D1] + dfv[D2]
+    create_altair_plot_vacc(total.cumsum(), f"{nice} Total", f"real_t_{short}")
+    create_altair_plot_vacc(dfv[D1].cumsum(), f"{nice} {D1}", f"real_d1_{short}")
+    create_altair_plot_vacc(dfv[D2].cumsum(), f"{nice} {D2}", f"real_d2_{short}")
+    create_altair_plot_vacc(rd[D1].cumsum(), f"{nice} {D1} (FDF)", f"fdf_d1_{short}")
+    create_altair_plot_vacc(rd[D2].cumsum(), f"{nice} {D2} (FDF)", f"fdf_d2_{short}")
 
     # plot immunity levels with matplotlib
-    ax = imm_normal.plot(title=f"Immunity {k}")
+    ax = imm_normal.plot(title=f"Immunity {nice}")
     ax.set_ylim(0, 1)
-    ax2 = imm_fdf.plot(title=f"FDF Immunity {k}")
+    ax2 = imm_fdf.plot(title=f"FDF Immunity {nice}")
     ax2.set_ylim(0, 1)
 
 # %%
-create_altair_plot_vacc(rd[D2].cumsum(), f"{k} {D2} (FDF)", f"test")
+create_altair_plot_vacc(rd[D2].cumsum(), f"{nice} {D2} (FDF)", f"test")
 # %%
