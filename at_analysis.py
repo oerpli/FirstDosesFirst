@@ -1,5 +1,6 @@
 #%%
 from utility import *
+import altair as alt
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
@@ -31,7 +32,7 @@ population = get_demographics_at()
 pt = pd.DataFrame(population.unstack()).T
 
 # Some global stuff
-plt.rcParams["figure.figsize"] = [8, 5]
+plt.rcParams["figure.figsize"] = [10, 5]
 
 O = "Old"
 Y = "Young"
@@ -81,51 +82,86 @@ d2data = prepare_table(x, "2 doses")
 save_table(d2data, "D2Data")
 
 #%% Only 1 Dose
-d1only = (d1a - d2a) / pop
+d1only = d1a - d2a
 ax = d1only.plot(title="Share of age group that received only 1 dose")
 save_fig(ax, "D1Only")
+x = [d1only.iloc[-2:-1], d1only.iloc[-2:-1] / pop * 100]
 d1only = prepare_table(x, "Only 1 dose")
 save_table(d1only, "D1OnlyData")
 
 
 #%% Combined table
-# d1d2o1 = fix_multilevel(d1data.join(d2data).join(d1only).swaplevel(axis=1)).sort_index(
-#     axis=1
-# )
+d1d2o1 = d1data.join(d2data).join(d1only)  # .sort_index(axis=1)
+d1d2o1
 # save_table(d1d2o1, "CompleteTable")
 #%% df[[D1,D2]].cumsum().plot()
 
-#%% Get Data for Old and Young
-cmp = pd.DataFrame()
-for d in [D1, D2]:
-    cmp[(d, O, region)] = df[d][[c for c in df[d].columns if c[0] >= "5"]].sum(axis=1)
-    cmp[(d, Y, region)] = df[d][[c for c in df[d].columns if c[0] < "5"]].sum(axis=1)
 
-for a in [O, Y]:
-    cmp[(T, a, region)] = cmp[(D1, a, region)] + cmp[(D2, a, region)]
-cmp = fix_multilevel(cmp)
+region_names = {
+    "Burgenland" : "at-bg",
+    "Kärnten" : "at-k",
+    "Niederösterreich" : "at-noe",
+    "Oberösterreich" : "at-ooe",
+    "Salzburg" : "at-sbg",
+    "Steiermark" : "at-stmk",
+    "Tirol" : "at-t",
+    "Vorarlberg" : "at-vlbg",
+    "Wien" : "at-vienna",
+    "Österreich" : "at",
+}
 
-a = cmp[T][sorted(cmp[T].columns)].cumsum()
+region = "Österreich"
+df = df_full[region]
+pop = pt[region].loc[0]
+dfv = df[[D1, D2]]
 
-share_vaccine_young = a[Y] / (a[O] + a[Y])
-t = "Share of vaccines going to young (<55)"
-share_vaccine_young.loc["2021-01-15":].plot(title=t)
 
+rd = redistribute_doses(dfv, pop, distr_first=True)
+rdc = rd.cumsum()
+rdc.plot()
+
+rd2 = redistribute_doses(dfv, pop, distr_first=False)
+rd2.cumsum().plot()
+
+#%%
+
+
+def get_avg_immunity(df, pop):
+    df = df.cumsum().copy()
+    df[D1] -= df[D2]  # D1 contains now only 1st dose instead
+    imm_p = df[D1].copy() * 0
+    imm_p += (df[D1] * 0.89) / pop
+    imm_p += (df[D2] * 0.95) / pop
+    return imm_p
+
+
+imm = get_avg_immunity(rd, pop)
+ax = get_avg_immunity(dfv, pop).plot()
+ax.set_ylim(0, 1)
+ax = get_avg_immunity(rd2, pop).plot()
+ax.set_ylim(0, 1)
 # %%
-for region in ["Vorarlberg"]:
-    v = df[region]
-    v_total = v[D1] + v[D2]
-    # v_total["Sum"] = v_total.sum(axis=1)
-    v_rel1 = v[D1] / pt[region].loc[0]
-    v_rel2 = v[D2] / pt[region].loc[0]
-    v_rel = v_total / pt[region].loc[0]
-    v_rel1.cumsum().plot(title=region)
-    v_rel2.cumsum().plot(title=region)
 # %%
-def calc_daily_stuff(df, pt):
-    display(df)
+chart_data = pd.melt(
+    imm.reset_index(),
+    id_vars="Date",
+    value_vars=imm.columns,
+    var_name="Age Group",
+    value_name="Immunity",
+)
 
-
-region = "Vorarlberg"
-calc_daily_stuff(df[region], pt[region])
+chart = (
+    alt.Chart(chart_data)
+    .mark_line(clip=True)
+    .encode(
+        x="Date",
+        y=alt.Y("Immunity", scale=alt.Scale(domain=(0, 1))),
+        color="Age Group",
+        strokeDash="Age Group",
+    )
+    .interactive()
+)
+chart.save("chart.json")
+# %%
+chart
 # %%
