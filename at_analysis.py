@@ -1,6 +1,5 @@
 #%%
 from utility import *
-import altair as alt
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
@@ -98,32 +97,22 @@ d1d2o1
 
 
 region_names = {
-    "Burgenland" : "at-bg",
-    "Kärnten" : "at-k",
-    "Niederösterreich" : "at-noe",
-    "Oberösterreich" : "at-ooe",
-    "Salzburg" : "at-sbg",
-    "Steiermark" : "at-stmk",
-    "Tirol" : "at-t",
-    "Vorarlberg" : "at-vlbg",
-    "Wien" : "at-vienna",
-    "Österreich" : "at",
+    "Burgenland": "at-bg",
+    "Kärnten": "at-k",
+    "Niederösterreich": "at-noe",
+    "Oberösterreich": "at-ooe",
+    "Salzburg": "at-sbg",
+    "Steiermark": "at-stmk",
+    "Tirol": "at-t",
+    "Vorarlberg": "at-vlbg",
+    "Wien": "at-vienna",
+    "Österreich": "at",
 }
 
-region = "Österreich"
-df = df_full[region]
-pop = pt[region].loc[0]
-dfv = df[[D1, D2]]
-
-
-rd = redistribute_doses(dfv, pop, distr_first=True)
-rdc = rd.cumsum()
-rdc.plot()
-
-rd2 = redistribute_doses(dfv, pop, distr_first=False)
-rd2.cumsum().plot()
-
-#%%
+# region = "Österreich"
+# df = df_full[region]
+# pop = pt[region].loc[0]
+# dfv = df[[D1, D2]]
 
 
 def get_avg_immunity(df, pop):
@@ -135,33 +124,49 @@ def get_avg_immunity(df, pop):
     return imm_p
 
 
-imm = get_avg_immunity(rd, pop)
-ax = get_avg_immunity(dfv, pop).plot()
-ax.set_ylim(0, 1)
-ax = get_avg_immunity(rd2, pop).plot()
-ax.set_ylim(0, 1)
-# %%
-# %%
-chart_data = pd.melt(
-    imm.reset_index(),
-    id_vars="Date",
-    value_vars=imm.columns,
-    var_name="Age Group",
-    value_name="Immunity",
-)
+for k, v in region_names.items():
+    df = df_full[k]  # get subset of region
+    pop = pt[k].loc[0]  # get population of region
+    dfv = df[[D1, D2]]  # 1D,2D get vaccination data of region
+    # Choose one from the following two
+    rd = redistribute_doses(dfv, pop, distr_first=False) # more conservative
+    rd = redistribute_doses(dfv, pop, distr_first=True) # also reassign first doses based on prio
+    
+    imm_normal = get_avg_immunity(dfv, pop)
+    imm_fdf = get_avg_immunity(rd, pop)
+    # plot immunity levels:
+    ax = imm_normal.plot(title=f"Immunity {k}")
+    ax.set_ylim(0,1)
+    ax2 = imm_fdf.plot(title=f"FDF Immunity {k}")
+    ax2.set_ylim(0,1)
 
-chart = (
-    alt.Chart(chart_data)
-    .mark_line(clip=True)
-    .encode(
-        x="Date",
-        y=alt.Y("Immunity", scale=alt.Scale(domain=(0, 1))),
-        color="Age Group",
-        strokeDash="Age Group",
+
+#%%
+if False:
+    import altair as alt
+
+    # %%
+    # %%
+    chart_data = pd.melt(
+        imm.reset_index(),
+        id_vars="Date",
+        value_vars=imm.columns,
+        var_name="Age Group",
+        value_name="Immunity",
     )
-    .interactive()
-)
-chart.save("chart.json")
-# %%
-chart
-# %%
+
+    chart = (
+        alt.Chart(chart_data)
+        .mark_line(clip=True)
+        .encode(
+            x="Date",
+            y=alt.Y("Immunity", scale=alt.Scale(domain=(0, 1))),
+            color="Age Group",
+            strokeDash="Age Group",
+        )
+        .interactive()
+    )
+    chart.save("chart.json")
+    # %%
+    chart
+    # %%
