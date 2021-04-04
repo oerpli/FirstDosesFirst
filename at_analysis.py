@@ -1,13 +1,16 @@
 #%%
-from utility import *
+import altair as alt
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-import altair as alt
 
-sns.set_theme()
+from dose_redistributing_methods import redistribute_doses
+from data_loading import *
+from utility import OUT_FOLDER, fix_multilevel, write_img_to_file, write_to_file
+
 from pathlib import Path
 
+sns.set_theme()
 PLOT_FOLDER = Path("Y:/GitRepos/oerpli.github.io/fdf")
 
 ALTAIR_WIDTH = 500
@@ -101,19 +104,6 @@ d1d2o1
 # save_table(d1d2o1, "CompleteTable")
 #%% df[[D1,D2]].cumsum().plot()
 
-
-region_names = {
-    # "Burgenland": "at-bg",
-    # "Kärnten": "at-k",
-    # "Niederösterreich": "at-noe",
-    # "Oberösterreich": "at-ooe",
-    # "Salzburg": "at-sbg",
-    # "Steiermark": "at-stmk",
-    "Tirol": "at-t",
-    "Vorarlberg": "at-vlbg",
-    "Wien": "at-vienna",
-    "Österreich": "at",
-}
 
 # region = "Österreich"
 # df = df_full[region]
@@ -218,6 +208,20 @@ def calc_weighted_immunity(imm, weights) -> pd.DataFrame:
 
 
 #%%
+region_names = {
+    "Burgenland": "at-bg",
+    "Kärnten": "at-k",
+    "Niederösterreich": "at-noe",
+    "Oberösterreich": "at-ooe",
+    "Salzburg": "at-sbg",
+    "Steiermark": "at-stmk",
+    "Tirol": "at-t",
+    "Vorarlberg": "at-vlbg",
+    "Wien": "at-vienna",
+    "Österreich": "at",
+}
+
+
 regions = region_names  # all regions
 # regions = {"Vorarlberg": "at-vlbg"}  # for debugging
 for nice, short in regions.items():

@@ -10,21 +10,12 @@ import seaborn as sns
 
 sns.set_theme()
 
+from data_loading import *
 from utility import (
-    Sources,
-    get_age_data,
-    get_data_with_cache,
-    get_death_data,
-    get_death_data_by_age,
-    get_death_distr_by_age_us,
-    get_vaccination_data,
     write_img_to_file,
     write_to_file,
     write_img_to_file,
     OUT_FOLDER,
-    D1,
-    D2,
-    D0,
 )
 
 ANALYSIS_NOTES = OUT_FOLDER / "analysis.md"
