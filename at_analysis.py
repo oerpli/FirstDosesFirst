@@ -6,7 +6,7 @@ import seaborn as sns
 
 from dose_redistributing_methods import redistribute_doses
 from data_loading import *
-from utility import OUT_FOLDER, fix_multilevel, write_img_to_file, write_to_file
+from utility import write_img_to_file, write_to_file
 
 from pathlib import Path
 
@@ -14,11 +14,7 @@ sns.set_theme()
 PLOT_FOLDER = Path("Y:/GitRepos/oerpli.github.io/fdf")
 
 ALTAIR_WIDTH = 500
-
-region = "Vorarlberg"
-short = "vlbg"
-vlbg_img = OUT_FOLDER / "img" / short
-vlbg_report = OUT_FOLDER / "CaseStudyVlbg.md"
+plt.rcParams["figure.figsize"] = [10, 5]
 
 deaths_at = get_deaths_by_age_at()
 
@@ -38,77 +34,6 @@ def save_table(df: pd.DataFrame, name: str):
 df_full = get_vaccinations_at()
 population = get_demographics_at()
 pt = pd.DataFrame(population.unstack()).T
-
-# Some global stuff
-plt.rcParams["figure.figsize"] = [10, 5]
-
-O = "Old"
-Y = "Young"
-T = "Total"
-
-
-#%% Select subset of region
-df = df_full[region]
-pop = pt[region].loc[0]
-
-
-#%% Plot overall vaccinations
-cumTotalVac = (df[D1] + df[D2]).cumsum()
-ax = cumTotalVac.plot(title="Cumulative number of vaccinations")
-save_fig(ax, "VaccTotal")
-
-#%% Per population
-ax = (cumTotalVac / pop).plot(title="Vaccinations per person in each age group")
-save_fig(ax, "VaccRelative")
-
-
-#%% Prepare table
-def prepare_table(x, name, prec=1):
-    df = pd.concat(x).T
-    df.columns = [(name, "Absolute"), (name, "%")]
-    df[(name, "%")] = df[(name, "%")].astype(float).round(2)
-    return fix_multilevel(df)
-
-
-#%% D1 per pop
-d1a = df[D1].cumsum()
-ax = (d1a / pop).plot(title="Share of age group with at least 1 dose")
-save_fig(ax, "D1Relative")
-
-x = [d1a.iloc[-2:-1], d1a.iloc[-2:-1] / pop * 100]
-d1data = prepare_table(x, "1 dose")
-save_table(d1data, "D1Data")
-
-#%% Same for D2
-d2a = df[D2].cumsum()
-ax = (d2a / pop).plot(title="Share of age group that received 2 doses")
-save_fig(ax, "D2Relative")
-
-x = [d2a.iloc[-2:-1], d2a.iloc[-2:-1] / pop * 100]
-d2data = prepare_table(x, "2 doses")
-
-save_table(d2data, "D2Data")
-
-#%% Only 1 Dose
-d1only = d1a - d2a
-ax = d1only.plot(title="Share of age group that received only 1 dose")
-save_fig(ax, "D1Only")
-x = [d1only.iloc[-2:-1], d1only.iloc[-2:-1] / pop * 100]
-d1only = prepare_table(x, "Only 1 dose")
-save_table(d1only, "D1OnlyData")
-
-
-#%% Combined table
-d1d2o1 = d1data.join(d2data).join(d1only)  # .sort_index(axis=1)
-d1d2o1
-# save_table(d1d2o1, "CompleteTable")
-#%% df[[D1,D2]].cumsum().plot()
-
-
-# region = "Österreich"
-# df = df_full[region]
-# pop = pt[region].loc[0]
-# dfv = df[[D1, D2]]
 
 
 def get_avg_immunity(df, pop):
@@ -223,13 +148,15 @@ region_names = {
 
 
 regions = region_names  # all regions
-# regions = {"Vorarlberg": "at-vlbg"}  # for debugging
+# regions = {"Österreich": "at"}  # for debugging
 for nice, short in regions.items():
     df = df_full[nice]  # get subset of region
     pop = pt[nice].loc[0]  # get population of region
     dfv = df[[D1, D2]]  # 1D,2D get vaccination data of region
     # Choose one from the following two
     rd = redistribute_doses(dfv, pop, distr_first=False)  # more conservative
+    # This method basically ignores members of "critical groups" except old people
+    # Gives nicer but likely wrong numbers.
     # rd = redistribute_doses(dfv, pop, distr_first=True) # also reassign first doses based on prio
 
     imm_normal = get_avg_immunity(dfv, pop)
@@ -245,14 +172,17 @@ for nice, short in regions.items():
     imm_w = imm_w_n.join(imm_w_fdf, rsuffix=" (FDF)", lsuffix=" (Normal)")
     per_pop_c = imm_w.columns[0::2]
     per_death_c = imm_w.columns[1::2]
+    total = dfv[D1] + dfv[D2]
 
+    # Avg immunity plot per age group, normal and FDF
     create_altair_plot_immunity(imm_normal, f"{nice}", f"real_{short}")
     create_altair_plot_immunity(imm_fdf, f"{nice} (FDF)", f"fdf_{short}")
 
+    # Weighted average immunity for FDF, population and death distribution weighted
     create_altair_plot_weighted_immunity(imm_w[per_pop_c], f"{nice}", f"p_{short}")
     create_altair_plot_weighted_immunity(imm_w[per_death_c], f"{nice}", f"d_{short}")
 
-    total = dfv[D1] + dfv[D2]
+    # Vaccination progress, Total, Real, alternative FDF data
     create_altair_plot_vacc(total.cumsum(), f"{nice} Total", f"real_t_{short}")
     create_altair_plot_vacc(dfv[D1].cumsum(), f"{nice} {D1}", f"real_d1_{short}")
     create_altair_plot_vacc(dfv[D2].cumsum(), f"{nice} {D2}", f"real_d2_{short}")
@@ -265,19 +195,21 @@ for nice, short in regions.items():
     ax2 = imm_fdf.plot(title=f"FDF Immunity {nice}")
     ax2.set_ylim(0, 1)
 
-# %%
-create_altair_plot_vacc(rd[D2].cumsum(), f"{nice} {D2} (FDF)", f"test")
+# %% Test stuff
+if False:
+    create_altair_plot_vacc(rd[D2].cumsum(), f"{nice} {D2} (FDF)", f"test")
 # %% Test germany
-de = get_vaccinations_de()
-guess_pop_de = pt["Österreich"].loc[0] * 10
-rde = redistribute_doses(de, guess_pop_de, distr_first=True)
-imm_de = get_avg_immunity(rde, guess_pop_de)
-plt = create_altair_plot_immunity(imm_de, "Germany (FDF)", f"fdf_{'de'}")
-display(plt)
-ws = {"Population": guess_pop_de, "Deaths": deaths_at.loc["Deaths"]}
-imm_w = calc_weighted_immunity(imm_de, ws)
-plt = create_altair_plot_weighted_immunity(imm_w, "Germany (FDF)", f"fdf_{'de'}")
-display(plt)
+if False:
+    de = get_vaccinations_de()
+    guess_pop_de = pt["Österreich"].loc[0] * 10
+    rde = redistribute_doses(de, guess_pop_de, distr_first=True)
+    imm_de = get_avg_immunity(rde, guess_pop_de)
+    plt = create_altair_plot_immunity(imm_de, "Germany (FDF)", f"fdf_{'de'}")
+    display(plt)
+    ws = {"Population": guess_pop_de, "Deaths": deaths_at.loc["Deaths"]}
+    imm_w = calc_weighted_immunity(imm_de, ws)
+    plt = create_altair_plot_weighted_immunity(imm_w, "Germany (FDF)", f"fdf_{'de'}")
+    display(plt)
 
 
 # %%

@@ -1,3 +1,8 @@
 # FirstDosesFirst
 
-Overall, the goal of this repository is to build a case for a FDF vaccination approach in Europe (US has enough vaccines to not care about this a whole lot, others have too few to care I guess).
+This repository contains the data analysis parts of my "First Doses First" project.
+
+Initially I planned to put the posts here as well but moved them to my [blog](https://github.com/oerpli/oerpli.github.io) instead.
+
+
+The overview of all published posts can be found here: [First Doses First (Overview)](https://oerpli.github.io/post/2021/04/first-doses-first/)
