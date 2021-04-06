@@ -108,7 +108,7 @@ def create_altair_plot_weighted_immunity(imm_w, title, name):
         .mark_line(clip=True)
         .encode(
             x="Date",
-            y="Immunity",
+            y=alt.Y("Immunity", scale=alt.Scale(domain=(0, 1))),
             color="Weighted by",
             strokeDash="Weighted by",
         )
