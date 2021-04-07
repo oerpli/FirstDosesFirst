@@ -45,7 +45,7 @@ def get_avg_immunity(df, pop):
     return imm_p
 
 
-def create_altair_plot_immunity(imm, title, name):
+def create_altair_plot_immunity(imm, title, name=None):
     chart_data = pd.melt(
         imm.reset_index(),
         id_vars="Date",
@@ -65,12 +65,13 @@ def create_altair_plot_immunity(imm, title, name):
         .properties(title=f"Estimated Immunity: {title}")
         .interactive()
     )
-    chart.save(str(PLOT_FOLDER / f"imm_{name}.json"))
+    if name:
+        chart.save(str(PLOT_FOLDER / f"imm_{name}.json"))
     return chart
 
 
 #%%
-def create_altair_plot_vacc(vacc, title, name):
+def create_altair_plot_vacc(vacc, title, name=None):
     chart_data = pd.melt(
         vacc.reset_index(),
         id_vars="Date",
@@ -90,12 +91,13 @@ def create_altair_plot_vacc(vacc, title, name):
         .properties(title=f"Number of vaccinations: {title}")
         .interactive()
     )
-    chart.save(str(PLOT_FOLDER / f"vacc_{name}.json"))
+    if name:
+        chart.save(str(PLOT_FOLDER / f"vacc_{name}.json"))
     return chart
 
 
 #%%
-def create_altair_plot_weighted_immunity(imm_w, title, name):
+def create_altair_plot_weighted_immunity(imm_w, title, name=None):
     chart_data = pd.melt(
         imm_w.reset_index(),
         id_vars="Date",
@@ -115,7 +117,8 @@ def create_altair_plot_weighted_immunity(imm_w, title, name):
         .properties(title=f"Weighted average immunity: {title}")
         .interactive()
     )
-    chart.save(str(PLOT_FOLDER / f"imm_w{name}.json"))
+    if name:
+        chart.save(str(PLOT_FOLDER / f"imm_w{name}.json"))
     return chart
 
 
@@ -196,8 +199,17 @@ for nice, short in regions.items():
     ax2.set_ylim(0, 1)
 
 # %% Test stuff
-if False:
-    create_altair_plot_vacc(rd[D2].cumsum(), f"{nice} {D2} (FDF)", f"test")
+create_altair_plot_vacc(rd[D2].cumsum(), f"{nice} {D2} (FDF)")
+create_altair_plot_vacc(rd[D2].cumsum(), f"{nice} {D2} (FDF)")
+create_altair_plot_vacc(rd[D2].cumsum(), f"{nice} {D2} (FDF)")
+
+
+since_new_dosing = dfv.loc["2021-03-14":]
+
+young, old = ["25-34", "35-44", "45-54", "55-64", "65-74"], ["75-84", "85-99"]
+since_new_dosing[D1][young].sum().sum()
+since_new_dosing[D2][young].sum().sum()
+
 # %% Test germany
 if False:
     de = get_vaccinations_de()
@@ -212,4 +224,8 @@ if False:
     display(plt)
 
 
+# %%
+
+# %%
+create_altair_plot_weighted_immunity(imm_w[per_death_c], f"{nice}", f"d_{short}")
 # %%
