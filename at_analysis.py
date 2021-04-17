@@ -123,6 +123,32 @@ def create_altair_plot_weighted_immunity(imm_w, title, name=None):
 
 
 #%%
+def create_altair_plot_at_least_1d(df, title, name=None):
+    chart_data = pd.melt(
+        df.reset_index(),
+        id_vars=["Date"],
+        value_vars=df.columns,
+        var_name="Age group",
+        value_name="Fraction",
+    )
+    chart = (
+        alt.Chart(chart_data, width=ALTAIR_WIDTH)
+        .mark_line(clip=True)
+        .encode(
+            x="Date",
+            y=alt.Y("Fraction", scale=alt.Scale(domain=(0, 1))),
+            color="Age group",
+            strokeDash="Age group",
+        )
+        .properties(title=f"At least one dose: {title}")
+        .interactive()
+    )
+    if name:
+        chart.save(str(PLOT_FOLDER / f"_1d_{name}.json"))
+    return chart
+
+
+#%%
 def calc_weighted_immunity(imm, weights) -> pd.DataFrame:
     dfs = []
     for name, weight in weights.items():
@@ -150,6 +176,13 @@ region_names = {
 }
 
 
+def get_vaccination_rate(df, pop) -> pd.DataFrame:
+    vacc_rate = df.copy().cumsum()
+    vacc_rate[D1] /= pop
+    vacc_rate[D2] /= pop
+    return vacc_rate
+
+
 regions = region_names  # all regions
 # regions = {"Österreich": "at"}  # for debugging
 for nice, short in regions.items():
@@ -158,6 +191,7 @@ for nice, short in regions.items():
     dfv = df[[D1, D2]]  # 1D,2D get vaccination data of region
     # Choose one from the following two
     rd = redistribute_doses(dfv, pop, distr_first=False)  # more conservative
+    rdfd = redistribute_doses(dfv, pop, distr_first=False, fractional_dosing=True)
     # This method basically ignores members of "critical groups" except old people
     # Gives nicer but likely wrong numbers.
     # rd = redistribute_doses(dfv, pop, distr_first=True) # also reassign first doses based on prio
@@ -180,6 +214,15 @@ for nice, short in regions.items():
     # Avg immunity plot per age group, normal and FDF
     create_altair_plot_immunity(imm_normal, f"{nice}", f"real_{short}")
     create_altair_plot_immunity(imm_fdf, f"{nice} (FDF)", f"fdf_{short}")
+
+    # FDF + FD Comparison
+    vrr = get_vaccination_rate(dfv, pop)
+    vr_fdf = get_vaccination_rate(rd, pop)
+    vr_fdf_fd = get_vaccination_rate(rdfd, pop)
+
+    create_altair_plot_at_least_1d(vrr[D1], f"{nice} (normal)")
+    create_altair_plot_at_least_1d(vr_fdf[D1], f"{nice} (FDF)")
+    create_altair_plot_at_least_1d(vr_fdf_fd[D1], f"{nice} (FDF + FD)")
 
     # Weighted average immunity for FDF, population and death distribution weighted
     create_altair_plot_weighted_immunity(imm_w[per_pop_c], f"{nice}", f"p_{short}")
@@ -206,9 +249,17 @@ create_altair_plot_vacc(rd[D2].cumsum(), f"{nice} {D2} (FDF)")
 
 since_new_dosing = dfv.loc["2021-03-14":]
 
-young, old = ["25-34", "35-44", "45-54", "55-64", "65-74"], ["75-84", "85-99"]
-since_new_dosing[D1][young].sum().sum()
-since_new_dosing[D2][young].sum().sum()
+young, middle, old = ["25-34", "35-44", "45-54"], ["55-64", "65-74"], ["75-84", "85-99"]
+yd1 = since_new_dosing[D1][young].sum().sum()
+yd2 = since_new_dosing[D2][young].sum().sum()
+md1 = since_new_dosing[D1][middle].sum().sum()
+md2 = since_new_dosing[D2][middle].sum().sum()
+od1 = since_new_dosing[D1][old].sum().sum()
+od2 = since_new_dosing[D2][old].sum().sum()
+
+print(yd1, yd2)
+print(md1, md2)
+print(od1, od2)
 
 # %% Test germany
 if False:
@@ -227,5 +278,5 @@ if False:
 # %%
 
 # %%
-create_altair_plot_weighted_immunity(imm_w[per_death_c], f"{nice}", f"d_{short}")
+# create_altair_plot_weighted_immunity(imm_w[per_death_c], f"{nice}")
 # %%
