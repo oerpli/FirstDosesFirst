@@ -185,61 +185,77 @@ def get_vaccination_rate(df, pop) -> pd.DataFrame:
 
 regions = region_names  # all regions
 # regions = {"Österreich": "at"}  # for debugging
-for nice, short in regions.items():
-    df = df_full[nice]  # get subset of region
-    pop = pt[nice].loc[0]  # get population of region
-    dfv = df[[D1, D2]]  # 1D,2D get vaccination data of region
-    # Choose one from the following two
-    rd = redistribute_doses(dfv, pop, distr_first=False)  # more conservative
-    rdfd = redistribute_doses(dfv, pop, distr_first=False, fractional_dosing=True)
-    # This method basically ignores members of "critical groups" except old people
-    # Gives nicer but likely wrong numbers.
-    # rd = redistribute_doses(dfv, pop, distr_first=True) # also reassign first doses based on prio
+for fd in [True, False]:
+    fds = "_fd" if fd else ""
+    for nice, short in regions.items():
+        df = df_full[nice]  # get subset of region
+        pop = pt[nice].loc[0]  # get population of region
+        dfv = df[[D1, D2]]  # 1D,2D get vaccination data of region
+        # Choose one from the following two
+        rd = redistribute_doses(dfv, pop, distr_first=False, fractional_dosing=fd)
+        # This method basically ignores members of "critical groups" except old people
+        # Gives nicer but likely wrong numbers.
+        # rd = redistribute_doses(dfv, pop, distr_first=True) # also reassign first doses based on prio
 
-    imm_normal = get_avg_immunity(dfv, pop)
-    imm_fdf = get_avg_immunity(rd, pop)
+        imm_normal = get_avg_immunity(dfv, pop)
+        imm_fdf = get_avg_immunity(rd, pop)
 
-    weightings = {
-        "Population": pop,  # calc immunity on average
-        "Death distribution": deaths_at.loc["Deaths"],  # weighted by deaths
-    }
+        print(f"FD {fd}: {rd.sum().sum()}")
+        print(f"FD {fd}: {dfv.sum().sum()}")
 
-    imm_w_n = calc_weighted_immunity(imm_normal, weightings)
-    imm_w_fdf = calc_weighted_immunity(imm_fdf, weightings)
-    imm_w = imm_w_n.join(imm_w_fdf, rsuffix=" (FDF)", lsuffix=" (Normal)")
-    per_pop_c = imm_w.columns[0::2]
-    per_death_c = imm_w.columns[1::2]
-    total = dfv[D1] + dfv[D2]
+        weightings = {
+            "Population": pop,  # calc immunity on average
+            "Death distribution": deaths_at.loc["Deaths"],  # weighted by deaths
+        }
 
-    # Avg immunity plot per age group, normal and FDF
-    create_altair_plot_immunity(imm_normal, f"{nice}", f"real_{short}")
-    create_altair_plot_immunity(imm_fdf, f"{nice} (FDF)", f"fdf_{short}")
+        imm_w_n = calc_weighted_immunity(imm_normal, weightings)
+        imm_w_fdf = calc_weighted_immunity(imm_fdf, weightings)
+        imm_w = imm_w_n.join(imm_w_fdf, rsuffix=" (FDF)", lsuffix=" (Normal)")
+        per_pop_c = imm_w.columns[0::2]
+        per_death_c = imm_w.columns[1::2]
+        total = dfv[D1] + dfv[D2]
 
-    # FDF + FD Comparison
-    vrr = get_vaccination_rate(dfv, pop)
-    vr_fdf = get_vaccination_rate(rd, pop)
-    vr_fdf_fd = get_vaccination_rate(rdfd, pop)
+        # Avg immunity plot per age group, normal and FDF
+        create_altair_plot_immunity(imm_normal, f"{nice}", f"real_{short}{fds}")
+        create_altair_plot_immunity(imm_fdf, f"{nice} (FDF)", f"fdf_{short}{fds}")
 
-    create_altair_plot_at_least_1d(vrr[D1], f"{nice} (normal)")
-    create_altair_plot_at_least_1d(vr_fdf[D1], f"{nice} (FDF)")
-    create_altair_plot_at_least_1d(vr_fdf_fd[D1], f"{nice} (FDF + FD)")
+        # FDF + FD Comparison
+        vrr = get_vaccination_rate(dfv, pop)
+        vr_fdf = get_vaccination_rate(rd, pop)
+        # vr_fdf_fd = get_vaccination_rate(rdfd, pop)
 
-    # Weighted average immunity for FDF, population and death distribution weighted
-    create_altair_plot_weighted_immunity(imm_w[per_pop_c], f"{nice}", f"p_{short}")
-    create_altair_plot_weighted_immunity(imm_w[per_death_c], f"{nice}", f"d_{short}")
+        create_altair_plot_at_least_1d(vrr[D1], f"{nice} (normal)")
+        create_altair_plot_at_least_1d(vr_fdf[D1], f"{nice} (FDF)")
+        # create_altair_plot_at_least_1d(vr_fdf_fd[D1], f"{nice} (FDF + FD)")
 
-    # Vaccination progress, Total, Real, alternative FDF data
-    create_altair_plot_vacc(total.cumsum(), f"{nice} Total", f"real_t_{short}")
-    create_altair_plot_vacc(dfv[D1].cumsum(), f"{nice} {D1}", f"real_d1_{short}")
-    create_altair_plot_vacc(dfv[D2].cumsum(), f"{nice} {D2}", f"real_d2_{short}")
-    create_altair_plot_vacc(rd[D1].cumsum(), f"{nice} {D1} (FDF)", f"fdf_d1_{short}")
-    create_altair_plot_vacc(rd[D2].cumsum(), f"{nice} {D2} (FDF)", f"fdf_d2_{short}")
+        # Weighted average immunity for FDF, population and death distribution weighted
+        create_altair_plot_weighted_immunity(
+            imm_w[per_pop_c], f"{nice}", f"p_{short}{fds}"
+        )
+        create_altair_plot_weighted_immunity(
+            imm_w[per_death_c], f"{nice}", f"d_{short}{fds}"
+        )
 
-    # plot immunity levels with matplotlib
-    ax = imm_normal.plot(title=f"Immunity {nice}")
-    ax.set_ylim(0, 1)
-    ax2 = imm_fdf.plot(title=f"FDF Immunity {nice}")
-    ax2.set_ylim(0, 1)
+        # Vaccination progress, Total, Real, alternative FDF data
+        create_altair_plot_vacc(total.cumsum(), f"{nice} Total", f"real_t_{short}{fds}")
+        create_altair_plot_vacc(
+            dfv[D1].cumsum(), f"{nice} {D1}", f"real_d1_{short}{fds}"
+        )
+        create_altair_plot_vacc(
+            dfv[D2].cumsum(), f"{nice} {D2}", f"real_d2_{short}{fds}"
+        )
+        create_altair_plot_vacc(
+            rd[D1].cumsum(), f"{nice} {D1} (FDF)", f"fdf_d1_{short}{fds}"
+        )
+        create_altair_plot_vacc(
+            rd[D2].cumsum(), f"{nice} {D2} (FDF)", f"fdf_d2_{short}{fds}"
+        )
+
+        # plot immunity levels with matplotlib
+        ax = imm_normal.plot(title=f"Immunity {nice}")
+        ax.set_ylim(0, 1)
+        ax2 = imm_fdf.plot(title=f"FDF Immunity {nice}")
+        ax2.set_ylim(0, 1)
 
 # %% Test stuff
 create_altair_plot_vacc(rd[D2].cumsum(), f"{nice} {D2} (FDF)")

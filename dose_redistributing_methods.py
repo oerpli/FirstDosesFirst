@@ -79,7 +79,7 @@ def redistribute_doses(
         # update data structures with vacc new d-th dose vaccines for age group
         have_d[(d, group)] += vacc  # dose/group lvl vacc counter
 
-        if have_d[(d, group)] == pop[group]:
+        if have_d[(d, group)] >= pop[group]:
             # print(f"Finished {d} for {grp}")
             priorities.remove((d, group))
         row[(d, group)] += vacc  # modify result
