@@ -11,7 +11,13 @@ from data_loading import D0, D1, D2
 # 95 - 89 = 6, i.e. 2nd dose is roughly 15x less effective
 # if X has a 15x higher risk of dying from COVID than Y, it's better to give X a second dose vs Y a first dose.
 def redistribute_doses(
-    df, pop, *, distr_first=False, priority=None, fractional_dosing=False
+    df,
+    pop,
+    *,
+    distr_first=False,
+    priority=None,
+    fractional_dosing=False,
+    wants_vaccine=1.0
 ) -> pd.DataFrame:
     """Distribute doses according to priority, s.t. lives saved is maximized.
     Total number of vaccinations for each day does not change (as it is assumed that this is limited by capacity/supply).
@@ -82,9 +88,12 @@ def redistribute_doses(
         # update data structures with vacc new d-th dose vaccines for age group
         have_d[(d, group)] += vacc  # dose/group lvl vacc counter
 
-        if have_d[(d, group)] >= pop[group]:
+        if have_d[(d, group)] >= pop[group] * wants_vaccine:
             # print(f"Finished {d} for {grp}")
-            priorities.remove((d, group))
+            if (d, group) in priorities:
+                priorities.remove((d, group))
+            if not priorities:
+                print("All groups finished")
         row[(d, group)] += vacc  # modify result
         return row
 
@@ -94,12 +103,18 @@ def redistribute_doses(
         for (d, grp), vacc in row.items():
             # Redistribute D2 always, first only if desired
             if d == D2 or distr_first:
-                d, grp = priorities[-1]  # get next group that may need something
+                if priorities:
+                    d, grp = priorities[-1]  # get next group that may need something
+                else:
+                    break
             while vacc > 0:
                 m, vacc = get_remainder_d(d, grp, vacc)  # distribute
                 if m > 0:
                     row_new = assign_d(d, grp, m, row_new)  # assign
-                d, grp = priorities[-1]  # get next group that may need something
+                if priorities:
+                    d, grp = priorities[-1]  # get next group that may need something
+                else:
+                    break
         # finished updating row, save to list
         rows.append(row_new)
     return pd.DataFrame(rows, index=df.index)

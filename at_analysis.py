@@ -70,7 +70,6 @@ def create_altair_plot_immunity(imm, title, name=None):
     return chart
 
 
-#%%
 def create_altair_plot_vacc(vacc, title, name=None):
     chart_data = pd.melt(
         vacc.reset_index(),
@@ -96,7 +95,6 @@ def create_altair_plot_vacc(vacc, title, name=None):
     return chart
 
 
-#%%
 def create_altair_plot_weighted_immunity(imm_w, title, name=None):
     chart_data = pd.melt(
         imm_w.reset_index(),
@@ -122,7 +120,6 @@ def create_altair_plot_weighted_immunity(imm_w, title, name=None):
     return chart
 
 
-#%%
 def create_altair_plot_at_least_1d(df, title, name=None):
     chart_data = pd.melt(
         df.reset_index(),
@@ -148,7 +145,6 @@ def create_altair_plot_at_least_1d(df, title, name=None):
     return chart
 
 
-#%%
 def calc_weighted_immunity(imm, weights) -> pd.DataFrame:
     dfs = []
     for name, weight in weights.items():
@@ -192,7 +188,9 @@ for fd in [True, False]:
         pop = pt[nice].loc[0]  # get population of region
         dfv = df[[D1, D2]]  # 1D,2D get vaccination data of region
         # Choose one from the following two
-        rd = redistribute_doses(dfv, pop, distr_first=False, fractional_dosing=fd)
+        rd = redistribute_doses(
+            dfv, pop, distr_first=False, fractional_dosing=fd, wants_vaccine=0.6
+        )
         # This method basically ignores members of "critical groups" except old people
         # Gives nicer but likely wrong numbers.
         # rd = redistribute_doses(dfv, pop, distr_first=True) # also reassign first doses based on prio
