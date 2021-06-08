@@ -36,8 +36,10 @@ def redistribute_doses(
     # releasec by the CDC
     # https://www.cdc.gov/coronavirus/2019-ncov/images/need-extra-precautions/319360-A_COVID-19_RiskForSevereDisease_Race_Age_2.18_p1.jpg
     priorities = priority or [
+        (D2, "00-24"),
         (D2, "25-34"),
         (D2, "35-44"),
+        (D1, "00-24"),
         (D2, "55-64"),
         (D1, "25-34"),
         (D2, "45-54"),
@@ -53,6 +55,7 @@ def redistribute_doses(
     ]
 
     fractional_doses = {
+        "00-24": 0.25,
         "25-34": 0.25,
         "35-44": 0.25,
         "45-54": 0.25,

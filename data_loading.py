@@ -283,7 +283,6 @@ def get_vaccinations_at(filter_region=None):
     clean_special_chars = lambda x: x.replace("\ufeff", "")
     df = get_data_with_cache(Sources.VaccAt, sep=";", parse_dates=True)
     df.columns = map(clean_special_chars, df.columns)
-
     # Remove BOM from first column
 
     # Translate columns
@@ -325,7 +324,7 @@ def get_vaccinations_at(filter_region=None):
         df = df_full[df_full.Region == region]
         groups = {
             D1: {
-                # "00-24": ["Gruppe<24_M_1", "Gruppe<24_W_1", "Gruppe<24_D_1"],
+                "00-24": ["Gruppe_<25_M_1", "Gruppe_<25_W_1", "Gruppe_<25_D_1"],
                 "25-34": ["Gruppe_25-34_M_1", "Gruppe_25-34_W_1", "Gruppe_25-34_D_1"],
                 "35-44": ["Gruppe_35-44_M_1", "Gruppe_35-44_W_1", "Gruppe_35-44_D_1"],
                 "45-54": ["Gruppe_45-54_M_1", "Gruppe_45-54_W_1", "Gruppe_45-54_D_1"],
@@ -335,7 +334,7 @@ def get_vaccinations_at(filter_region=None):
                 "85-99": ["Gruppe_>84_M_1", "Gruppe_>84_W_1", "Gruppe_>84_D_1"],
             },
             D2: {
-                # "00-24": ["Gruppe<24_M_2", "Gruppe<24_W_2", "Gruppe<24_D_2"],
+                "00-24": ["Gruppe_<25_M_2", "Gruppe_<25_W_2", "Gruppe_<25_D_2"],
                 "25-34": ["Gruppe_25-34_M_2", "Gruppe_25-34_W_2", "Gruppe_25-34_D_2"],
                 "35-44": ["Gruppe_35-44_M_2", "Gruppe_35-44_W_2", "Gruppe_35-44_D_2"],
                 "45-54": ["Gruppe_45-54_M_2", "Gruppe_45-54_W_2", "Gruppe_45-54_D_2"],
@@ -396,7 +395,7 @@ def get_demographics_at():
     df["Age"] = df["Age"].astype(int)
     df = df.set_index("Age")
     age_groups = {
-        # "00-24": list(range(00, 24 + 1)),
+        "00-24": list(range(00, 24 + 1)),
         "25-34": list(range(25, 34 + 1)),
         "35-44": list(range(35, 44 + 1)),
         "45-54": list(range(45, 54 + 1)),
@@ -409,3 +408,6 @@ def get_demographics_at():
     for k, v in age_groups.items():
         new_df.loc[k] = df.loc[v].sum()
     return new_df
+
+
+# %%
